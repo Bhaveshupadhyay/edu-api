@@ -3,6 +3,7 @@ import { Router } from "express";
 import {
   get_token_verified,
   post_subscription_plan,
+  get_checkout_options,
   post_subscription,
   get_user_subscriptions,
   cancel_subscription,

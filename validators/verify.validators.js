@@ -6,12 +6,14 @@ export const otpValidator = {
 			.trim()
 			.notEmpty()
 			.withMessage("OTP required")
+			.bail()
 			.matches(/^[^<>]*$/)
 			.withMessage("Invalid OTP"),
 		body("otp")
 			.trim()
 			.notEmpty()
 			.withMessage("OTP required")
+			.bail()
 			.matches(/^[^<>]*$/)
 			.withMessage("Invalid OTP"),
 	]

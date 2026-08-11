@@ -37,11 +37,27 @@ function generateSecureOTP() {
   return otp.toString();
 }
 
+function generateDeviceFingerprint(req) {
+  const userAgent = req.headers['user-agent'] || '';
+  const acceptLanguage = req.headers['accept-language'] || '';
+  const ip = req.ip || req.connection?.remoteAddress || req.headers['x-forwarded-for'] || ''; 
+
+  const rawString = `${userAgent}:${acceptLanguage}:${ip}`;
+  return crypto.createHash('sha256').update(rawString).digest('hex');
+}
+
 /**
  * Core Auth Sync Logic (Used by login/register flows)
  */
-const syncAuthBackend = async (req, res, emailInput, deviceId, deviceTypeInput, password, isRegistration = false) => {
-  const email = (emailInput || "").toLowerCase();
+const syncAuthBackend = async (req, res, emailInput, deviceIdInput, deviceTypeInput, password, isRegistration = false) => {
+  const email = emailInput || "";
+  const type = ['android', 'ios', 'web', 'tv'].includes(deviceTypeInput) ? deviceTypeInput : 'web';
+  
+  // For web (or when device_id is omitted), use SHA-256 fingerprint hash; for mobile (android/ios), use supplied ID (android_id / IDFV)
+  let deviceId = deviceIdInput;
+  if (type === 'web' || !deviceId) {
+    deviceId = deviceId || generateDeviceFingerprint(req);
+  }
 
   try {
     const result = await withTransaction(dbConnectionPromise, async (connection) => {
@@ -129,15 +145,25 @@ const syncAuthBackend = async (req, res, emailInput, deviceId, deviceTypeInput, 
         // Normalize device type to match enum: 'android', 'ios', 'web', 'tv'
         const type = ['android', 'ios', 'web', 'tv'].includes(deviceTypeInput) ? deviceTypeInput : 'web';
 
-        // ALIGNED WITH NEW user_devices SCHEMA (using device_type, seen_at auto-updates)
-        await connection.execute(
-          `INSERT INTO user_devices (user_id, device_id, device_type, rem_token) 
-           VALUES (?, ?, ?, ?)
-           ON DUPLICATE KEY UPDATE 
-           rem_token = VALUES(rem_token),
-           device_type = VALUES(device_type)`,
-          [userId, deviceId, type, refreshToken]
+        // Check if device already exists for this user
+        const [[existingDevice]] = await connection.execute(
+          "SELECT 1 FROM user_devices WHERE user_id = ? AND device_id = ? LIMIT 1",
+          [userId, deviceId]
         );
+
+        if (!existingDevice) {
+          // Device does not exist for this user, insert new device
+          await connection.execute(
+            `INSERT INTO user_devices (user_id, device_id, device_type, rem_token) VALUES (?, ?, ?, ?)`,
+            [userId, deviceId, type, refreshToken]
+          );
+        } else {
+          // Device already exists for this user, update refresh token and device type without duplicate insertion
+          await connection.execute(
+            `UPDATE user_devices SET rem_token = ?, device_type = ? WHERE user_id = ? AND device_id = ?`,
+            [refreshToken, type, userId, deviceId]
+          );
+        }
         
         const [[{ count }]] = await connection.execute(
           "SELECT COUNT(*) as count FROM user_devices WHERE user_id = ?",
@@ -152,12 +178,19 @@ const syncAuthBackend = async (req, res, emailInput, deviceId, deviceTypeInput, 
           clearCache(`user_profiles:${userId}`)
         ]);
 
-        await connection.execute(
-          `INSERT INTO user_profiles (user_id, device_id, name) 
-           VALUES (?, ?, ?)
-           ON DUPLICATE KEY UPDATE name = name`,
-          [userId, deviceId, 'Member']
+        const [[existingProfile]] = await connection.execute(
+          "SELECT 1 FROM user_profiles WHERE user_id = ? AND device_id = ? LIMIT 1",
+          [userId, deviceId]
         );
+
+        if (!existingProfile) {
+          await connection.execute(
+            `INSERT INTO user_profiles (user_id, device_id, name) 
+             VALUES (?, ?, ?)
+             ON DUPLICATE KEY UPDATE name = name`,
+            [userId, deviceId, 'Member']
+          );
+        }
       }
 
       const isUserReviewer = isReviewer(email);
@@ -165,12 +198,12 @@ const syncAuthBackend = async (req, res, emailInput, deviceId, deviceTypeInput, 
 
       const [subscriptions] = await connection.execute(
         `SELECT up.name as profile_name, up.bio as profile_bio, s.status, s.current_period_end, s.stripe_sub_id, 
-        p.plan_name, p.monthly_price, p.max_screens, p.duration_value, p.duration_unit
-         FROM user_subscriptions s
-         JOIN plans p ON s.plan_id = p.id
-         LEFT JOIN user_profiles up ON up.user_id = s.user_id AND up.device_id = ?
-         WHERE s.user_id = ? 
-         ORDER BY s.id DESC LIMIT 1`,
+          p.plan_name, p.monthly_price, p.max_screens, p.duration_value, p.duration_unit
+          FROM user_subscriptions s
+          JOIN plans p ON s.plan_id = p.id
+          LEFT JOIN user_profiles up ON up.user_id = s.user_id AND up.device_id = ?
+          WHERE s.user_id = ? 
+          ORDER BY s.id DESC LIMIT 1`,
         [deviceId, userId]
       );
 

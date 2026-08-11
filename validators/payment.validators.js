@@ -9,6 +9,7 @@ export const subscriptionValidators = {
       .trim()
       .notEmpty()
       .withMessage("You need to be login. Please log in first.")
+      .bail()
       .matches(/^[^<>]*$/)
       .withMessage("Invalid token format."),
   ],
@@ -18,16 +19,24 @@ export const subscriptionValidators = {
       .trim()
       .notEmpty()
       .withMessage("Plan name is required")
+      .bail()
+      .toLowerCase()
       .matches(safeStringRegex)
       .withMessage("Plan name must be a string"),
     body('device_id')
       .trim()
       .notEmpty()
       .withMessage('Oops, something went wrong')
-      .isLength({ min: 9, max: 12 })
+      .bail()
+      .isLength({ min: 8, max: 255 })
       .withMessage('Oops, something went wrong')
-      .matches(/^[A-Za-z0-9-]+$/)
+      .bail()
+      .matches(/^[A-Za-z0-9-:_]+$/)
       .withMessage('Oops, something went wrong'),
+    body('device')
+      .optional()
+      .toLowerCase()
+      .isIn(['web', 'app'])
   ],
 
   cancelSubscription: [
@@ -35,6 +44,7 @@ export const subscriptionValidators = {
       .trim()
       .notEmpty()
       .withMessage("Subscription ID is required")
+      .bail()
       .isString()
       .withMessage("Subscription ID must be a string")
   ],
@@ -44,6 +54,7 @@ export const subscriptionValidators = {
       .trim()
       .notEmpty()
       .withMessage("Checkout session ID is required")
+      .bail()
       .isString()
       .withMessage("Invalid session format"),
   ],
@@ -58,9 +69,11 @@ export const subscriptionValidators = {
       .trim()
       .notEmpty()
       .withMessage('Oops, something went wrong')
-      .isLength({ min: 9, max: 12 })
+      .bail()
+      .isLength({ min: 8, max: 255 })
       .withMessage('Oops, something went wrong')
-      .matches(/^[A-Za-z0-9-]+$/)
+      .bail()
+      .matches(/^[A-Za-z0-9-:_]+$/)
       .withMessage('Oops, something went wrong'),
   ],
 }; 

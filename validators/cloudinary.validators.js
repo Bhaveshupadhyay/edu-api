@@ -19,6 +19,12 @@ export const getSignatureValidator = [
  * Validates parameters for deleting an asset.
  */
 export const deleteAssetValidator = [
-    body('public_id').notEmpty().withMessage('public_id is required').isString().trim(),
+    body('public_id')
+        .trim()
+        .notEmpty()
+        .withMessage('public_id is required')
+        .bail()
+        .isString()
+        .withMessage('public_id must be a string'),
     body('resource_type').optional().isIn(['image', 'video', 'raw']).withMessage('Invalid resource_type'),
 ];

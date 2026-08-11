@@ -7,14 +7,18 @@ export const userValidator = {
   searchData: [
     query("term")
       .optional()
+      .trim()
       .isString()
+      .bail()
       .isLength({ min: 1, max: 100 })
+      .withMessage("Search term must be between 1 and 100 characters")
+      .bail()
       .matches(safeStringRegex)
       .withMessage("Invalid search term"),
-    query("year").optional().isNumeric().withMessage("Year must be numeric"),
-    query("month").optional().isNumeric().withMessage("Month must be numeric"),
-    query("page_items").optional().isInt().withMessage("Items must be a number"),
-    query("pgNo").optional().isInt().withMessage("Page must be a number")
+    query("year").optional().isInt().withMessage("Year must be numeric"),
+    query("month").optional().isInt({ min: 1, max: 12 }).withMessage("Month must be between 1 and 12"),
+    query("page_items").optional().isInt({ min: 1 }).withMessage("Items must be a positive number"),
+    query("pgNo").optional().isInt({ min: 1 }).withMessage("Page must be a positive number")
   ],
 
   getHomeData: [
@@ -27,6 +31,7 @@ export const userValidator = {
       .trim()
       .notEmpty()
       .withMessage("ID is required")
+      .bail()
       .isInt({ gt: 0 })
       .withMessage("ID must be a positive number"),
     query("limit").optional().isInt({ min: 1, max: 100 }).toInt(),
@@ -38,6 +43,7 @@ export const userValidator = {
       .trim()
       .notEmpty()
       .withMessage("ID is required")
+      .bail()
       .isInt({ gt: 0 })
       .withMessage("ID must be a positive number"),
     query("category_id")
@@ -53,6 +59,7 @@ export const userValidator = {
       .trim()
       .notEmpty()
       .withMessage("Module ID is required")
+      .bail()
       .isInt({ gt: 0 })
       .withMessage("Module ID must be a positive number"),
     query("limit").optional().isInt({ min: 1, max: 100 }).toInt(),
@@ -64,13 +71,15 @@ export const userValidator = {
     param("video_provider_id")
       .trim()
       .notEmpty()
-      .withMessage("ID is required")
-      .isInt({ gt: 0 })
-      .withMessage("ID must be a positive number"),
+      .withMessage("Video provider ID is required")
+      .bail()
+      .isString()
+      .withMessage("Invalid video provider ID"),
     param('ui_style')
       .trim()
       .notEmpty()
       .withMessage("UI Style is required")
+      .bail()
       .isIn(['horizontal', 'vertical'])
       .withMessage('Invalid UI style')
   ],
@@ -80,14 +89,18 @@ export const userValidator = {
       .trim()
       .notEmpty()
       .withMessage("Comment is required")
+      .bail()
       .isLength({ min: 1, max: 1000 })
+      .withMessage("Comment must be between 1 and 1000 characters")
+      .bail()
       .matches(safeStringRegex)
       .withMessage("Invalid characters in comment"),
     body("lesson_id")
       .trim()
       .notEmpty()
       .withMessage("Lesson is required")
-      .isInt()
+      .bail()
+      .isInt({ gt: 0 })
       .withMessage("Lesson must be numeric")
   ],
 
@@ -96,13 +109,15 @@ export const userValidator = {
       .trim()
       .notEmpty()
       .withMessage("Value is required")
+      .bail()
       .isInt({ min: 0, max: 5 })
       .withMessage("Invalid value found..."),
     body("comment_id")
       .trim()
       .notEmpty()
       .withMessage("Comment is required")
-      .isInt()
+      .bail()
+      .isInt({ gt: 0 })
       .withMessage("Comment must be numeric")
   ],
 
@@ -111,12 +126,13 @@ export const userValidator = {
       .trim()
       .notEmpty()
       .withMessage("Lesson is required")
-      .isInt()
+      .bail()
+      .isInt({ gt: 0 })
       .withMessage("Lesson must be numeric"),
-    query("page_items").optional().isInt().withMessage("Items must be a number"),
-    query("pgNo").optional().isInt().withMessage("Page must be a number"),
-    query("page_items2").optional().isInt().withMessage("Item second must be a number"),
-    query("pgNo2").optional().isInt().withMessage("Page second must be a number")
+    query("page_items").optional().isInt({ min: 1 }).withMessage("Items must be a positive number"),
+    query("pgNo").optional().isInt({ min: 1 }).withMessage("Page must be a positive number"),
+    query("page_items2").optional().isInt({ min: 1 }).withMessage("Item second must be a positive number"),
+    query("pgNo2").optional().isInt({ min: 1 }).withMessage("Page second must be a positive number")
   ],
 
   postReply: [
@@ -124,14 +140,18 @@ export const userValidator = {
       .trim()
       .notEmpty()
       .withMessage("Reply is required")
+      .bail()
       .isLength({ min: 1, max: 1000 })
+      .withMessage("Reply must be between 1 and 1000 characters")
+      .bail()
       .matches(safeStringRegex)
       .withMessage("Invalid characters in reply"),
     body("comment_id")
       .trim()
       .notEmpty()
       .withMessage("Comment is required")
-      .isInt()
+      .bail()
+      .isInt({ gt: 0 })
       .withMessage("Comment must be numeric")
   ],
 
@@ -140,13 +160,15 @@ export const userValidator = {
       .trim()
       .notEmpty()
       .withMessage("Value is required")
+      .bail()
       .isInt({ min: 0, max: 5 })
       .withMessage("Invalid value found..."),
     body("comment_id")
       .trim()
       .notEmpty()
       .withMessage("Comment is required")
-      .isInt()
+      .bail()
+      .isInt({ gt: 0 })
       .withMessage("Comment must be numeric")
   ],
 
@@ -154,15 +176,19 @@ export const userValidator = {
     body('device_id')
       .trim()
       .notEmpty()
-      .isLength({ min: 9 })
+      .withMessage("Device ID is required.")
+      .bail()
+      .isLength({ min: 8, max: 255 })
       .withMessage("We couldn't find the device you're looking for. Please log in again.")
-      .matches(/^[A-Za-z0-9-]+$/)
+      .bail()
+      .matches(/^[A-Za-z0-9-:_]+$/)
       .withMessage("Device ID format is invalid."),
     
     body('content_id')
       .trim()
       .notEmpty()
       .withMessage("Please select a video to add to your watchlist.")
+      .bail()
       .isInt({ gt: 0 })
       .withMessage("This Video doesn't exist. Please check the ID and try again."),
     
@@ -170,8 +196,10 @@ export const userValidator = {
       .trim()
       .notEmpty()
       .withMessage("Oops! There was an issue with the video. Please try again.")
+      .bail()
       .isInt({ gt: 0 })
       .withMessage("Oops! There was an issue with the content type. Please try again.")
+      .bail()
       .isIn(Object.keys(CategoryType))
       .withMessage("Oops! There was an issue with the content type. Please try again.")
   ],
@@ -180,9 +208,12 @@ export const userValidator = {
     query("device")
       .trim()
       .notEmpty()
-      .isLength({ min: 9 })
+      .withMessage("Device ID is required.")
+      .bail()
+      .isLength({ min: 8, max: 255 })
       .withMessage("We couldn't find the device you're looking for. Please log in again.")
-      .matches(/^[A-Za-z0-9-]+$/)
+      .bail()
+      .matches(/^[A-Za-z0-9-:_]+$/)
       .withMessage("Device ID format is invalid."),
 
     query('pgNo').optional().isInt({min:1}).toInt(),
@@ -193,9 +224,12 @@ export const userValidator = {
     query('device_id')
       .trim()
       .notEmpty()
-      .isLength({ min: 9 })
+      .withMessage("Device ID is required.")
+      .bail()
+      .isLength({ min: 8, max: 255 })
       .withMessage("We couldn't find the device you're looking for. Please log in again.")
-      .matches(/^[A-Za-z0-9-]+$/)
+      .bail()
+      .matches(/^[A-Za-z0-9-:_]+$/)
       .withMessage("Device ID format is invalid."),
     query('pgNo').optional().isInt({min:1}).toInt(),
     query('page_items').optional().isInt({min:1}).toInt(),
@@ -205,15 +239,19 @@ export const userValidator = {
     body('device_id')
       .trim()
       .notEmpty()
-      .isLength({ min: 9 })
+      .withMessage("Device ID is required.")
+      .bail()
+      .isLength({ min: 8, max: 255 })
       .withMessage("We couldn't find the device you're looking for. Please log in again.")
-      .matches(/^[A-Za-z0-9-]+$/)
+      .bail()
+      .matches(/^[A-Za-z0-9-:_]+$/)
       .withMessage("Device ID format is invalid."),
 
     body('content_id')
       .trim()
       .notEmpty()
       .withMessage("Content ID is required.")
+      .bail()
       .isInt({ gt: 0 })
       .withMessage("Invalid content ID provided."),
 
@@ -221,8 +259,10 @@ export const userValidator = {
       .trim()
       .notEmpty()
       .withMessage("Content type is required.")
+      .bail()
       .isInt({ gt: 0 })
       .withMessage("Invalid content type provided.")
+      .bail()
       .custom(value => {
         const validTypes = Object.keys(CategoryType).map(Number);
         if (!validTypes.includes(Number(value))) {
@@ -235,6 +275,7 @@ export const userValidator = {
       .trim()
       .notEmpty()
       .withMessage("Timing is required.")
+      .bail()
       .isFloat({ min: 0 })
       .withMessage("Timing must be a non-negative number.")
   ],

@@ -7,7 +7,8 @@ import {
   STRIPE_SECRET_KEY,
   STRIPE_WEBHOOK_SECRET,
   BASE_URL1,
-  WEB_TOKEN_SECRET
+  WEB_TOKEN_SECRET,
+  CHECKSUM_SECRET
 } from "../config/env.js";
 
 import {
@@ -29,6 +30,16 @@ import { generateTokens, setTokenCookie, isReviewer } from "../utils/authHelper.
 
 const stripe = new Stripe(STRIPE_SECRET_KEY);
 
+import crypto from 'crypto';
+
+// Helper function to create a checksum
+const generateChecksum = (dataString) => {
+  return crypto
+    .createHmac('sha256', CHECKSUM_SECRET) // Secret key known only to backend
+    .update(dataString)
+    .digest('hex');
+};
+
 // ========== HELPER FUNCTIONS ==========
 
 async function getCustomerByUserId(user_id) {
@@ -39,7 +50,7 @@ async function getCustomerByUserId(user_id) {
   );
 
   if (!user) {
-    throw createError("User not found.", 404);
+    throw createError("Account not found. Please log in again.", 404);
   }
 
   // If user already has a stripe_customer_id, return it
@@ -77,15 +88,21 @@ export const get_token_verified = asyncHandler(async (req, res) => {
   handleValidationErrors(req);
 
   const { token, device_id } = req.body;
-  if (!token) throw createError("Token is required", 400);
+  if (!token) throw createError("Verification token is required. Please log in again.", 400);
 
-  const verifiedUser = jwt.verify(token, WEB_TOKEN_SECRET);
-  if (!verifiedUser?.id) throw createError("Invalid token", 401);
+  let verifiedUser;
+  try {
+    verifiedUser = jwt.verify(token, WEB_TOKEN_SECRET);
+  } catch (err) {
+    throw createError("Your session link has expired or is invalid. Please log in again.", 401);
+  }
+
+  if (!verifiedUser?.id) throw createError("Your session link has expired. Please log in again.", 401);
 
   const userId = verifiedUser.id;
   const db = await dbConnectionPromise;
   const [[user]] = await db.query("SELECT id, email FROM users WHERE id = ?", [userId]);
-  if (!user) throw createError("User not found", 404);
+  if (!user) throw createError("Account not found. Please sign up or log in.", 404);
 
   const email = user.email;
   const isUserReviewer = isReviewer(email);
@@ -146,27 +163,75 @@ export const post_subscription_plan = asyncHandler(async (req, res) => {
   return sendSuccess(res, { plans });
 });
 
+export const get_checkout_options = asyncHandler(async (req, res) => {
+  handleValidationErrors(req);
+  
+  const { plan, device_id, device } = req.body; 
+  
+  // Create a strict data pattern string
+  const rawData = `${req.user.id}:${plan}:${device_id}:${device}`;
+  const checksum = generateChecksum(rawData);
+
+  return sendSuccess(res, {
+    plan,
+    device_id,
+    device,
+    checksum // Send this to UI
+  });
+});
+
 export const post_subscription = asyncHandler(async (req, res) => {
   handleValidationErrors(req);
 
-  const { plan, device_id } = req.body; 
-  const planName = plan.toLowerCase();
+  const { plan, device_id, device, checksum } = req.body; 
   const user_id = req.user.id;
+
+  if (!checksum) {
+    throw createError("We couldn't verify your checkout request. Please refresh the page and try again.", 400);
+  }
+
+  // 1. Re-create the checksum using the exact same pattern
+  const rawData = `${user_id}:${plan}:${device_id}:${device}`;
+  const expectedChecksum = crypto
+    .createHmac('sha256', CHECKSUM_SECRET)
+    .update(rawData)
+    .digest('hex');
+
+  // 2. Safely compare checksums (handling timing attack protection & buffer length match)
+  let isValid = false;
+  try {
+    const checksumBuf = Buffer.from(checksum, 'hex');
+    const expectedBuf = Buffer.from(expectedChecksum, 'hex');
+    if (checksumBuf.length === expectedBuf.length) {
+      isValid = crypto.timingSafeEqual(checksumBuf, expectedBuf);
+    }
+  } catch (err) {
+    isValid = false;
+  }
+
+  if (!isValid) {
+    throw createError("Unable to complete checkout due to a validation error. Please refresh the page and try again.", 403);
+  }
 
   const db = await dbConnectionPromise;
   
-  const [[planData]] = await db.query("SELECT id, stripe_price_id FROM plans WHERE plan_name = ? AND is_active = 1", [planName]);
+  const [[planData]] = await db.query(
+    "SELECT id, stripe_price_id FROM plans WHERE plan_name = ? AND is_active = 1", 
+    [plan]
+  );
 
   if (!planData) {
-    throw createError("Invalid or inactive plan selected.", 400);
+    throw createError("The selected subscription plan is currently unavailable. Please choose another plan.", 400);
   }
 
   // Verify device ownership
-  const [[device]] = await db.query(
+  const [[deviceFound]] = await db.query(
     "SELECT 1 FROM user_devices WHERE user_id = ? AND device_id = ? LIMIT 1",
     [user_id, device_id]
   );
-  if (!device) throw createError("Device not found or not registered to this user.", 403);
+  if (!deviceFound) {
+    throw createError("Your device could not be verified. Please log in again to continue.", 403);
+  }
 
   const customerId = await getCustomerByUserId(user_id);
 
@@ -177,61 +242,35 @@ export const post_subscription = asyncHandler(async (req, res) => {
   );
 
   if (existingSub) {
-    throw createError("You already have an active subscription.", 400);
+    throw createError("You already have an active subscription on your account.", 400);
   }
 
-  // const session = await stripe.checkout.sessions.create({
-  //   mode: "subscription",
-  //   payment_method_types: ["card"],
-  //   customer: customerId,
-  //   line_items: [{
-  //     price: planData.stripe_price_id,
-  //     quantity: 1
-  //   }],
-  //   metadata: {
-  //     user_id: user_id.toString(),
-  //     plan_id: planData.id.toString(),
-  //     device_id: device_id
-  //   },
-  //   success_url: `${BASE_URL1}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
-  //   cancel_url: `${BASE_URL1}/payment-cancelled`
-  // });
+  const success_url = device === 'app' ? `${BASE_URL1}/payment-success` : `${BASE_URL1}/payment-success?session_id={CHECKOUT_SESSION_ID}`;
+  const cancel_url = device === 'app' ? `${BASE_URL1}/payment-cancelled` : `${BASE_URL1}/payment-cancelled`;
 
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
-    // CHANGE THIS: Instead of forcing just "card", use 'automatic' 
-    // or include sepa_debit if enabled in your dashboard
     payment_method_types: ["card", "sepa_debit"], 
     customer: customerId,
     line_items: [{
-      price: plan.stripe_price_id,
+      price: planData.stripe_price_id,
       quantity: 1
     }],
     metadata: {
       user_id: user_id.toString(),
-      plan_id: plan_id.toString(),
+      plan_id: planData.id.toString(),
       device_id: device_id
     },
     subscription_data: {
       metadata: {
         user_id: user_id.toString(),
-        plan_id: plan_id.toString(),
+        plan_id: planData.id.toString(),
         device_id: device_id
-      },
-      payment_settings: {
-        save_default_payment_method: 'on_subscription',
-        // ADD THIS: Instructs Stripe how to behave if the first payment 
-        // fallback requires asynchronous handling (like SEPA bank processing)
-        payment_method_options: {
-          card: {
-            request_three_d_secure: 'any' // Forces SCA setup check on day one
-          }
-        }
       }
     },
-    success_url: `${BASE_URL1}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${BASE_URL1}/payment-cancelled`
-});
+    success_url,
+    cancel_url
+  });
 
   return sendSuccess(res, { url: session.url });
 });
@@ -266,7 +305,7 @@ export const get_subscription_status = asyncHandler(async (req, res) => {
         expiry: null
       });
     }
-    throw createError("Subscription not found.", 404);
+    throw createError("We couldn't find any subscription records for your account.", 404);
   }
 
   return sendSuccess(res, {
@@ -316,7 +355,7 @@ export const cancel_subscription = asyncHandler(async (req, res) => {
   );
 
   if (!subscription) {
-    throw createError("Subscription not found or unauthorized.", 404);
+    throw createError("We couldn't find an active subscription to cancel.", 404);
   }
 
   // Delete immediately in Stripe
@@ -334,7 +373,7 @@ export const cancel_subscription = asyncHandler(async (req, res) => {
     clearCache(`user_profiles:${user_id}`)
   ]);
 
-  return sendSuccess(res, { message: "Subscription cancelled successfully." });
+  return sendSuccess(res, { message: "Your subscription has been cancelled successfully." });
 });
 
 export const stripe_webhook = async (req, res) => {
@@ -358,3 +397,4 @@ export const stripe_webhook = async (req, res) => {
     res.status(500).json({ error: 'Failed to enqueue webhook' });
   }
 };
+

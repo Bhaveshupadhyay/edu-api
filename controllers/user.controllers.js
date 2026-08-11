@@ -442,7 +442,7 @@ export const get_lesson_data = asyncHandler(async (req, res) => {
   const user_id = req.user?.id;
   const db = await dbConnectionPromise;
 
-  // 1. Check if the module containing this video is free
+  // 1. Check if the module containing this video is free and get workout instructions
   const [[accessInfo]] = await db.query(`
     SELECT m.is_free 
     FROM videos v
@@ -480,7 +480,10 @@ export const get_lesson_data = asyncHandler(async (req, res) => {
     return vimeoResponse?.data || null;
   }, 86400 * 7); // Cache vimeo data for 7 days
 
-  return sendSuccess(res, { ...videoData, ui_style });
+  return sendSuccess(res, { 
+    ...videoData, 
+    ui_style
+  });
 });
 
 export const getPlans = asyncHandler(async (req, res) => {

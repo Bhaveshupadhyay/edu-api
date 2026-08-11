@@ -3,7 +3,6 @@ import { body, param, query } from 'express-validator';
 // Common Name Validator for reusability
 // Regex allows: letters (including Spanish), numbers, spaces, underscores, and hyphens.
 // Whitelisting naturally prevents malicious code like <script> by excluding < > and other special characters.
-// const safeStringRegex = /^[a-zA-Z0-9áéíóúÁÉÍÓÚñÑüÜ\s_\-]+$/;
 const safeStringRegex = /^[a-zA-Z0-9áéíóúÁÉÍÓÚñÑüÜ\s&?,.:'¿¡!()\-\s]+$/;
 
 const nameValidation = (fieldLabel = 'Name', fieldName = 'name') =>
@@ -11,8 +10,10 @@ const nameValidation = (fieldLabel = 'Name', fieldName = 'name') =>
     .trim()
     .notEmpty()
     .withMessage(`${fieldLabel} is required`)
+    .bail()
     .isLength({ min: 2, max: 100 })
     .withMessage(`${fieldLabel} must be between 2 and 100 characters`)
+    .bail()
     .matches(safeStringRegex)
     .withMessage(`${fieldLabel} contains invalid characters (only letters, numbers, spaces, &, and single quotes are allowed)`);
 
@@ -21,8 +22,10 @@ const titleValidation = (fieldLabel = 'Title') =>
     .trim()
     .notEmpty()
     .withMessage(`${fieldLabel} is required`)
+    .bail()
     .isLength({ min: 2, max: 100 })
     .withMessage(`${fieldLabel} must be between 2 and 100 characters`)
+    .bail()
     .matches(safeStringRegex)
     .withMessage(`${fieldLabel} contains invalid characters (only letters, numbers, spaces, &, and single quotes are allowed)`);
 
@@ -51,12 +54,12 @@ export const categoryValidators = {
     query('cursor').optional().isInt({ min: 1 }).toInt()
   ],
   create: [
-    body('group_id').isInt({ gt: 0 }).withMessage('Valid Group ID required'),
+    body('group_id').notEmpty().withMessage('Group ID is required').bail().isInt({ gt: 0 }).withMessage('Valid Group ID required'),
     nameValidation('Category name')
   ],
   update: [
     param('id').isInt({ gt: 0 }).withMessage('Valid Category ID required'),
-    body('group_id').isInt({ gt: 0 }).withMessage('Valid Group ID required'),
+    body('group_id').notEmpty().withMessage('Group ID is required').bail().isInt({ gt: 0 }).withMessage('Valid Group ID required'),
     nameValidation('Category name')
   ],
   delete: [
@@ -111,18 +114,18 @@ export const navPillCollectionValidators = {
     param('nav_pill_id').isInt({ gt: 0 }).withMessage('Valid Nav Pill ID required')
   ],
   upsert: [
-    body('nav_pill_id').isInt({ gt: 0 }).withMessage('Valid Nav Pill ID required'),
-    body('collection_ids').isArray({ min: 1 }).withMessage('Collection IDs must be a non-empty array'),
+    body('nav_pill_id').notEmpty().withMessage('Nav Pill ID is required').bail().isInt({ gt: 0 }).withMessage('Valid Nav Pill ID required'),
+    body('collection_ids').notEmpty().withMessage('Collection IDs are required').bail().isArray({ min: 1 }).withMessage('Collection IDs must be a non-empty array'),
     body('collection_ids.*').isInt({ gt: 0 }).withMessage('Each Collection ID must be a valid integer'),
   ],
   update: [
     param('nav_pill_id').isInt({ gt: 0 }).withMessage('Valid Nav Pill ID required'),
-    body('collection_ids').isArray({ min: 1 }).withMessage('Collection IDs must be a non-empty array'),
+    body('collection_ids').notEmpty().withMessage('Collection IDs are required').bail().isArray({ min: 1 }).withMessage('Collection IDs must be a non-empty array'),
     body('collection_ids.*').isInt({ gt: 0 }).withMessage('Each Collection ID must be a valid integer'),
   ],
   reorder: [
-    body('id').isInt({ gt: 0 }).withMessage('Valid ID required'),
-    body('new_position').optional().isFloat().withMessage('New position must be a non-negative integer'),
+    body('id').notEmpty().withMessage('ID is required').bail().isInt({ gt: 0 }).withMessage('Valid ID required'),
+    body('new_position').optional().isFloat({ min: 0 }).withMessage('New position must be a non-negative integer'),
   ],
   delete: [
     param('id').isInt({ gt: 0 }).withMessage('Valid ID required')
@@ -134,18 +137,18 @@ export const collectionModuleValidators = {
     param('collection_id').isInt({ gt: 0 }).withMessage('Valid Collection ID required')
   ],
   upsert: [
-    body('collection_id').isInt({ gt: 0 }).withMessage('Valid Collection ID required'),
-    body('module_ids').isArray({ min: 1 }).withMessage('Module IDs must be a non-empty array'),
+    body('collection_id').notEmpty().withMessage('Collection ID is required').bail().isInt({ gt: 0 }).withMessage('Valid Collection ID required'),
+    body('module_ids').notEmpty().withMessage('Module IDs are required').bail().isArray({ min: 1 }).withMessage('Module IDs must be a non-empty array'),
     body('module_ids.*').isInt({ gt: 0 }).withMessage('Each Module ID must be a valid integer'),
   ],
   update: [
     param('collection_id').isInt({ gt: 0 }).withMessage('Valid Collection ID required'),
-    body('module_ids').isArray({ min: 1 }).withMessage('Module IDs must be a non-empty array'),
+    body('module_ids').notEmpty().withMessage('Module IDs are required').bail().isArray({ min: 1 }).withMessage('Module IDs must be a non-empty array'),
     body('module_ids.*').isInt({ gt: 0 }).withMessage('Each Module ID must be a valid integer'),
   ],
   reorder: [
-    body('id').isInt({ gt: 0 }).withMessage('Valid ID required'),
-    body('new_position').optional().isFloat().withMessage('New position must be a non-negative integer'),
+    body('id').notEmpty().withMessage('ID is required').bail().isInt({ gt: 0 }).withMessage('Valid ID required'),
+    body('new_position').optional().isFloat({ min: 0 }).withMessage('New position must be a non-negative integer'),
   ],
   delete: [
     param('id').isInt({ gt: 0 }).withMessage('Valid ID required')
@@ -154,17 +157,17 @@ export const collectionModuleValidators = {
 
 export const homePageConfigValidators = {
   create: [
-    body('nav_pill_id').isInt({ gt: 0 }).withMessage('Valid Nav Pill ID required'),
+    body('nav_pill_id').notEmpty().withMessage('Nav Pill ID is required').bail().isInt({ gt: 0 }).withMessage('Valid Nav Pill ID required'),
     body('is_visible').optional().isBoolean().toBoolean()
   ],
   update: [
     param('id').isInt({ gt: 0 }).withMessage('Valid ID required'),
-    body('nav_pill_id').isInt({ gt: 0 }).withMessage('Valid Nav Pill ID required'),
+    body('nav_pill_id').notEmpty().withMessage('Nav Pill ID is required').bail().isInt({ gt: 0 }).withMessage('Valid Nav Pill ID required'),
     body('is_visible').optional().isBoolean().toBoolean()
   ],
   reorder: [
-    body('id').isInt({ gt: 0 }).withMessage('Valid ID required'),
-    body('new_position').optional().isFloat().withMessage('New position must be a non-negative integer')
+    body('id').notEmpty().withMessage('ID is required').bail().isInt({ gt: 0 }).withMessage('Valid ID required'),
+    body('new_position').optional().isFloat({ min: 0 }).withMessage('New position must be a non-negative integer')
   ],
   delete: [
     param('id').isInt({ gt: 0 }).withMessage('Valid ID required')
@@ -187,7 +190,7 @@ export const eduModuleValidators = {
   ],
   create: [
     titleValidation('Module title'),
-    body('description').optional().trim(),
+    body('description').optional({ nullable: true }).trim().isString().withMessage('Description must be a string'),
     body('thumbnail_url').trim().notEmpty().withMessage("Thumbnail URL is required"),
     body('is_active').optional().isBoolean().toBoolean(),
     body('is_free').optional().isBoolean().toBoolean(),
@@ -196,7 +199,7 @@ export const eduModuleValidators = {
   update: [
     param('id').isInt({ gt: 0 }).withMessage('Valid module ID required'),
     titleValidation('Module title'),
-    body('description').optional().trim(),
+    body('description').optional({ nullable: true }).trim().isString().withMessage('Description must be a string'),
     body('thumbnail_url').trim().notEmpty().withMessage("Thumbnail URL is required"),
     body('is_active').optional().isBoolean().toBoolean(),
     body('is_free').optional().isBoolean().toBoolean(),
@@ -216,18 +219,18 @@ export const syllabusValidators = {
     param('id').isInt({ gt: 0 }).withMessage('Valid syllabus ID required')
   ],
   create: [
-    body('module_id').isInt({ gt: 0 }).withMessage('Valid module ID required'),
+    body('module_id').notEmpty().withMessage('Module ID is required').bail().isInt({ gt: 0 }).withMessage('Valid module ID required'),
     titleValidation('Syllabus title'),
-    body('workout_instructions').optional({ nullable: true }).isString().withMessage('Workout instructions must be a string')
+    body('workout_instructions').optional({ nullable: true }).trim().isString().withMessage('Workout instructions must be a string')
   ],
   update: [
     param('id').isInt({ gt: 0 }).withMessage('Valid syllabus ID required'),
     titleValidation('Syllabus title'),
-    body('workout_instructions').optional({ nullable: true }).isString().withMessage('Workout instructions must be a string')
+    body('workout_instructions').optional({ nullable: true }).trim().isString().withMessage('Workout instructions must be a string')
   ],
   reorder: [
-    body('id').isInt({ gt: 0 }).withMessage('Valid ID required'),
-    body('new_position').optional().isFloat().withMessage('New position must be a non-negative integer'),
+    body('id').notEmpty().withMessage('ID is required').bail().isInt({ gt: 0 }).withMessage('Valid ID required'),
+    body('new_position').optional().isFloat({ min: 0 }).withMessage('New position must be a non-negative integer'),
   ],
   delete: [
     param('id').isInt({ gt: 0 }).withMessage('Valid syllabus ID required')
@@ -243,19 +246,19 @@ export const lessonValidators = {
     param('id').isInt({ gt: 0 }).withMessage('Valid lesson ID required')
   ],
   create: [
-    body('syllabus_id').isInt({ gt: 0 }).withMessage('Valid syllabus ID required'),
+    body('syllabus_id').notEmpty().withMessage('Syllabus ID is required').bail().isInt({ gt: 0 }).withMessage('Valid syllabus ID required'),
     titleValidation('Lesson title'),
-    body('workout_instructions').optional({ nullable: true }).isString().withMessage('Workout instructions must be a string')
+    body('workout_instructions').optional({ nullable: true }).trim().isString().withMessage('Workout instructions must be a string')
   ],
   update: [
     param('id').isInt({ gt: 0 }).withMessage('Valid lesson ID required'),
-    body('syllabus_id').isInt({ gt: 0 }).withMessage('Valid syllabus ID required'),
+    body('syllabus_id').notEmpty().withMessage('Syllabus ID is required').bail().isInt({ gt: 0 }).withMessage('Valid syllabus ID required'),
     titleValidation('Lesson title'),
-    body('workout_instructions').optional({ nullable: true }).isString().withMessage('Workout instructions must be a string')
+    body('workout_instructions').optional({ nullable: true }).trim().isString().withMessage('Workout instructions must be a string')
   ],
   reorder: [
-    body('id').isInt({ gt: 0 }).withMessage('Valid ID required'),
-    body('new_position').optional().isFloat().withMessage('New position must be a non-negative integer'),
+    body('id').notEmpty().withMessage('ID is required').bail().isInt({ gt: 0 }).withMessage('Valid ID required'),
+    body('new_position').optional().isFloat({ min: 0 }).withMessage('New position must be a non-negative integer'),
   ],
   delete: [
     param('id').isInt({ gt: 0 }).withMessage('Valid lesson ID required')
@@ -273,13 +276,13 @@ export const videoValidators = {
     param('lesson_id').isInt({ gt: 0 }).withMessage('Valid lesson ID required')
   ],
   create: [
-    body('lesson_id').isInt({ gt: 0 }).withMessage('Valid lesson ID required'),
+    body('lesson_id').notEmpty().withMessage('Lesson ID is required').bail().isInt({ gt: 0 }).withMessage('Valid lesson ID required'),
     body('video_provider_id').trim().notEmpty().withMessage("video_provider_id is required"),
     body('ui_style').optional().isIn(['horizontal', 'vertical']).withMessage('Invalid UI style')
   ],
   update: [
     param('id').isInt({ gt: 0 }).withMessage('Video ID required'),
-    body('lesson_id').isInt({ gt: 0 }).withMessage('Valid lesson ID required'),
+    body('lesson_id').notEmpty().withMessage('Lesson ID is required').bail().isInt({ gt: 0 }).withMessage('Valid lesson ID required'),
     body('video_provider_id').trim().notEmpty().withMessage("video_provider_id is required"),
     body('ui_style').optional().isIn(['horizontal', 'vertical']).withMessage('Invalid UI style')
   ],
@@ -303,10 +306,10 @@ export const planValidators = {
   ],
   add: [
     nameValidation('Plan name', 'plan_name'),
-    body('max_screens').isInt({ min: 1 }).withMessage('Valid number of screens required'),
+    body('max_screens').notEmpty().withMessage('Max screens is required').bail().isInt({ min: 1 }).withMessage('Valid number of screens required'),
     body('stripe_price_id').trim().notEmpty().withMessage('Valid stripe_price_id required'),
-    body('monthly_price').isDecimal().withMessage('Valid monthly_price required'),
-    body('duration_value').isInt({ min: 1 }).withMessage('Valid number of duration value required'),
+    body('monthly_price').notEmpty().withMessage('Monthly price is required').bail().isDecimal().withMessage('Valid monthly_price required'),
+    body('duration_value').notEmpty().withMessage('Duration value is required').bail().isInt({ min: 1 }).withMessage('Valid number of duration value required'),
     body("duration_unit")
       .optional()
       .isIn(['day', 'week', 'month', 'year'])
@@ -316,10 +319,10 @@ export const planValidators = {
   update: [
     param('id').isInt({ gt: 0 }).withMessage('Valid Plan ID required'),
     nameValidation('Plan name', 'plan_name'),
-    body('max_screens').isInt({ min: 1 }).withMessage('Valid number of screens required'),
+    body('max_screens').notEmpty().withMessage('Max screens is required').bail().isInt({ min: 1 }).withMessage('Valid number of screens required'),
     body('stripe_price_id').trim().notEmpty().withMessage('Valid stripe_price_id required'),
-    body('monthly_price').isDecimal().withMessage('Valid monthly_price required'),
-    body('duration_value').isInt({ min: 1 }).withMessage('Valid number of duration value required'),
+    body('monthly_price').notEmpty().withMessage('Monthly price is required').bail().isDecimal().withMessage('Valid monthly_price required'),
+    body('duration_value').notEmpty().withMessage('Duration value is required').bail().isInt({ min: 1 }).withMessage('Valid number of duration value required'),
     body("duration_unit")
       .optional()
       .isIn(['day', 'week', 'month', 'year'])
@@ -330,3 +333,4 @@ export const planValidators = {
     param('id').isInt({ gt: 0 }).withMessage('Valid Plan ID required')
   ]
 };
+

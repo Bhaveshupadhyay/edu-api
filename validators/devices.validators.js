@@ -6,18 +6,22 @@ export const deviceValidator = {
       .trim()
       .notEmpty()
       .withMessage('Oops, something went wrong')
-      .isLength({ min: 9, max: 12 })
+      .bail()
+      .isLength({ min: 8, max: 255 })
       .withMessage('Oops, something went wrong')
-      .matches(/^[A-Za-z0-9-]+$/)
+      .bail()
+      .matches(/^[A-Za-z0-9-:_]+$/)
       .withMessage('Oops, something went wrong'),
 
     body('device_id')
       .trim()
       .notEmpty()
       .withMessage('Oops, something went wrong')
-      .isLength({ min: 9, max: 12 })
+      .bail()
+      .isLength({ min: 8, max: 255 })
       .withMessage('Oops, something went wrong')
-      .matches(/^[A-Za-z0-9-]+$/)
+      .bail()
+      .matches(/^[A-Za-z0-9-:_]+$/)
       .withMessage('Oops, something went wrong'),
   ]
 };
