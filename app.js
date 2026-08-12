@@ -44,6 +44,7 @@ app.use(cookieParser());
 // Stripe webhook needs raw body for signature verification
 // Must be BEFORE express.json()
 app.use("/api/v1/payments/webhook", express.raw({ type: 'application/json' }));
+app.use("/api/v2/payments/webhook", express.raw({ type: 'application/json' }));
 
 app.use(express.json());
 
@@ -54,23 +55,36 @@ app.use(logger());
 app.get('/health', (_req, res) => res.json({ ok: true }));
 
 app.use("/api/v1/auth", authRouter);
+app.use("/api/v2/auth", authRouter);
 app.use("/api/v1/refresh", refreshRouter);
+app.use("/api/v2/refresh", refreshRouter);
 app.use("/api/v1/mail", verifyRouter);
+app.use("/api/v2/mail", verifyRouter);
 app.use("/api/v1/forget", resetMiddleware, forgetRouter);
+app.use("/api/v2/forget", resetMiddleware, forgetRouter);
 app.use("/api/v1/users", userRouter);
+app.use("/api/v2/users", userRouter);
 app.use("/api/v1/devices", devicesRouter);
+app.use("/api/v2/devices", devicesRouter);
 app.use("/api/v1/profile", profileRouter);
+app.use("/api/v2/profile", profileRouter);
 
 app.use("/api/v1/payments", paymentRouter);
+app.use("/api/v2/payments", paymentRouter);
 app.use("/api/v1/logout", logoutRouter);
+app.use("/api/v2/logout", logoutRouter);
 
 app.use("/api/v1/remove-session", deleteRouter);
+app.use("/api/v2/remove-session", deleteRouter);
 
 app.use("/api/v1/weblink", webLinkRouter);
+app.use("/api/v2/weblink", webLinkRouter);
 
 app.use("/api/v1/notifications", notificationRouter);
+app.use("/api/v2/notifications", notificationRouter);
 
 app.use("/api/v1/admin", adminRouter);
+app.use("/api/v2/admin", adminRouter);
 
 app.use((_req, res) => {
   return res.sendStatus(404);
