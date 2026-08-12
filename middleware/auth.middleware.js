@@ -27,7 +27,7 @@ const authMiddleware = async (req, res, next) => {
 	        req.user = verifiedUser; // Attach user info to request
 	        next(); // Proceed to next middleware or route handler
 	    } catch (err) {
-			console.log(err);
+			logger.error(err);
 	        const error = new Error("Invalid Token");
 	        error.statusCode = 401;
 	        throw error;

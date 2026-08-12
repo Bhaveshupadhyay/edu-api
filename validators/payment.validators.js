@@ -14,7 +14,7 @@ export const subscriptionValidators = {
       .withMessage("Invalid token format."),
   ],
 
-  subscribe: [
+  checkoutOptions: [
     body("plan")
       .trim()
       .notEmpty()
@@ -39,6 +39,38 @@ export const subscriptionValidators = {
       .isIn(['web', 'app'])
   ],
 
+  subscribe: [
+    body("plan")
+      .trim()
+      .notEmpty()
+      .withMessage("Plan name is required")
+      .bail()
+      .toLowerCase()
+      .matches(safeStringRegex)
+      .withMessage("Plan name must be a string"),
+    body('device_id')
+      .trim()
+      .notEmpty()
+      .withMessage('Oops, something went wrong')
+      .bail()
+      .isLength({ min: 8, max: 255 })
+      .withMessage('Oops, something went wrong')
+      .bail()
+      .matches(/^[A-Za-z0-9-:_]+$/)
+      .withMessage('Oops, something went wrong'),
+    body('device')
+      .optional()
+      .toLowerCase()
+      .isIn(['web', 'app']),
+    body('checksum')
+      .trim()
+      .notEmpty()
+      .withMessage("We couldn't verify your checkout request. Please refresh the page and try again.")
+      .bail()
+      .matches(/^[a-fA-F0-9]+$/)
+      .withMessage("Invalid checksum format")
+  ],
+
   cancelSubscription: [
     body("subs_id")
       .trim()
@@ -47,6 +79,9 @@ export const subscriptionValidators = {
       .bail()
       .isString()
       .withMessage("Subscription ID must be a string")
+      .bail()
+      .matches(/^[^<>]*$/)
+      .withMessage("Invalid subscription ID format")
   ],
 
   subscriptionStatus: [
@@ -56,6 +91,9 @@ export const subscriptionValidators = {
       .withMessage("Checkout session ID is required")
       .bail()
       .isString()
+      .withMessage("Invalid session format")
+      .bail()
+      .matches(/^[^<>]*$/)
       .withMessage("Invalid session format"),
   ],
 

@@ -154,7 +154,7 @@ export const get_token_verified = asyncHandler(async (req, res) => {
   });
 });
 
-export const post_subscription_plan = asyncHandler(async (req, res) => {
+export const get_subscription_plan = asyncHandler(async (req, res) => {
   const plans = await getOrSetCache("active_plans", async () => {
     const db = await dbConnectionPromise;
     const [rows] = await db.query("SELECT * FROM plans WHERE is_active = TRUE");
@@ -173,9 +173,6 @@ export const get_checkout_options = asyncHandler(async (req, res) => {
   const checksum = generateChecksum(rawData);
 
   return sendSuccess(res, {
-    plan,
-    device_id,
-    device,
     checksum // Send this to UI
   });
 });
@@ -210,7 +207,7 @@ export const post_subscription = asyncHandler(async (req, res) => {
   }
 
   if (!isValid) {
-    throw createError("Unable to complete checkout due to a validation error. Please refresh the page and try again.", 403);
+    throw createError("Sorry we are unable to complete checkout. Please refresh the page and try again.", 403);
   }
 
   const db = await dbConnectionPromise;
@@ -320,26 +317,28 @@ export const get_subscription_status = asyncHandler(async (req, res) => {
 
 export const get_user_subscriptions = asyncHandler(async (req, res) => {
   const user_id = req.user.id;
-  const { limit, cursor } = getCursorPaginationParams(req.query);
-  const cacheKey = `user_subscriptions_list:${user_id}:limit=${limit}:cursor=${cursor || 'none'}`;
+  const db = await dbConnectionPromise;
 
-  const data = await getOrSetCache(cacheKey, async () => {
-    const db = await dbConnectionPromise;
+  // 1. Delete cancelled subscriptions older than 2 days for this user
+  await db.query(
+    `DELETE FROM user_subscriptions 
+     WHERE user_id = ? 
+       AND status IN ('canceled', 'cancelled') 
+       AND updated_at < NOW() - INTERVAL 2 DAY`,
+    [user_id]
+  );
 
-    return await getCursorResults(
-      db,
-      `SELECT us.*, p.plan_name, p.monthly_price, p.duration_value, p.duration_unit 
-       FROM user_subscriptions us
-       JOIN plans p ON us.plan_id = p.id
-       WHERE us.user_id = ?`,
-      [user_id],
-      cursor,
-      limit,
-      'us.id'
-    );
-  }, 3600);
+  // 2. Fetch active subscriptions first, followed by recent cancelled subscriptions (within 2 days)
+  const [subscriptions] = await db.query(
+    `SELECT us.stripe_sub_id, us.status, us.current_period_end, us.updated_at, 
+      p.plan_name, p.monthly_price, p.duration_value, p.duration_unit 
+     FROM user_subscriptions us
+     JOIN plans p ON us.plan_id = p.id
+     WHERE us.user_id = ? ORDER BY us.id DESC`,
+    [user_id]
+  );
 
-  return sendCursorPaginatedResponse(res, data.result, { nextCursor: data.nextCursor, hasMore: data.hasMore });
+  return sendCursorPaginatedResponse(res, subscriptions, { nextCursor: null, hasMore: false });
 });
 
 export const cancel_subscription = asyncHandler(async (req, res) => {

@@ -2,7 +2,7 @@ import { Router } from "express";
 
 import {
   get_token_verified,
-  post_subscription_plan,
+  get_subscription_plan,
   get_checkout_options,
   post_subscription,
   get_user_subscriptions,
@@ -24,9 +24,15 @@ paymentRouter.post("/index",
 
 paymentRouter.post("/webhook", stripe_webhook);
 
-paymentRouter.post("/plans", 
+paymentRouter.get("/plans", 
   authMiddleware,
-  post_subscription_plan
+  get_subscription_plan
+);
+
+paymentRouter.post("/checkout-options",
+  authMiddleware,
+  subscriptionValidators.checkoutOptions,
+  get_checkout_options
 );
 
 paymentRouter.post("/subscribe", 
@@ -35,7 +41,7 @@ paymentRouter.post("/subscribe",
   post_subscription
 );
 
-paymentRouter.post("/subscriptions",
+paymentRouter.get("/subscriptions",
   authMiddleware,
   subscriptionValidators.all,
   get_user_subscriptions

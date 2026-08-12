@@ -20,6 +20,7 @@ import forgetRouter from "./routes/forget.routes.js";
 import webLinkRouter from "./routes/website.link.routes.js";
 import paymentRouter from "./routes/payment.routes.js";
 import deleteRouter from "./routes/delete.routes.js";
+import notificationRouter from "./routes/notification.routes.js";
 
 import errorMiddleware from "./middleware/error.middleware.js";
 import resetMiddleware from "./middleware/reset.middleware.js";
@@ -66,6 +67,8 @@ app.use("/api/v1/logout", logoutRouter);
 app.use("/api/v1/remove-session", deleteRouter);
 
 app.use("/api/v1/weblink", webLinkRouter);
+
+app.use("/api/v1/notifications", notificationRouter);
 
 app.use("/api/v1/admin", adminRouter);
 

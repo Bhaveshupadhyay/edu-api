@@ -51,8 +51,22 @@ function generateDeviceFingerprint(req) {
  */
 const syncAuthBackend = async (req, res, emailInput, deviceIdInput, deviceTypeInput, password, isRegistration = false) => {
   const email = emailInput || "";
-  const type = ['android', 'ios', 'web', 'tv'].includes(deviceTypeInput) ? deviceTypeInput : 'web';
+  const type = ['android', 'ios', 'web'].includes(deviceTypeInput) ? deviceTypeInput : 'web';
   
+  if (['android', 'ios'].includes(type) && (!deviceIdInput || (typeof deviceIdInput === 'string' && !deviceIdInput.trim()))) {
+    return res.status(400).json({
+      isSuccess: false,
+      message: "Device ID is required for android and ios devices"
+    });
+  }
+
+  if (deviceIdInput && (/<[^>]*>/g.test(deviceIdInput) || /[^A-Za-z0-9-:_]/.test(deviceIdInput))) {
+    return res.status(400).json({
+      isSuccess: false,
+      message: "Invalid Device ID"
+    });
+  }
+
   // For web (or when device_id is omitted), use SHA-256 fingerprint hash; for mobile (android/ios), use supplied ID (android_id / IDFV)
   let deviceId = deviceIdInput;
   if (type === 'web' || !deviceId) {
