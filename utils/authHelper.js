@@ -32,14 +32,15 @@ export const isReviewer = (email) => {
 /**
  * Generate Access and Refresh tokens
  * @param {number|string} userId - User ID
+ * @param {string} userType - User type ('user' or 'admin', default: 'user')
  * @returns {Object} { accessToken, refreshToken }
  */
-export const generateTokens = (userId) => {
-  const accessToken = jwt.sign({ id: userId }, ACCESS_TOKEN_SECRET, {
+export const generateTokens = (userId, userType) => {
+  const accessToken = jwt.sign({ id: userId, role: userType }, ACCESS_TOKEN_SECRET, {
     expiresIn: ACCESS_EXPIRES_IN
   });
 
-  const refreshToken = jwt.sign({ id: userId }, REFRESH_TOKEN_SECRET, {
+  const refreshToken = jwt.sign({ id: userId, role: userType }, REFRESH_TOKEN_SECRET, {
     expiresIn: REFRESH_EXPIRES_IN
   });
 

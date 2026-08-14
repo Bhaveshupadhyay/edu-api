@@ -80,10 +80,13 @@ import {
 } from '../validators/admin.validators.js';
 
 import authMiddleware from "../middleware/auth.middleware.js";
+import authorizeRoles from "../middleware/role.middleware.js";
+import { UserRole } from "../utils/enums.js";
+
 
 const adminRouter = Router();
 
-adminRouter.use(authMiddleware);
+adminRouter.use(authMiddleware, authorizeRoles(UserRole.ADMIN));
 
 // ------------ CATEGORY GROUPS ------------
 adminRouter.get("/category-groups", categoryGroupValidators.all, category_groups_get);

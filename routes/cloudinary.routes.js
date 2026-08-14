@@ -10,7 +10,7 @@ router.use(authMiddleware);
 /**
  * Route to generate a signed Cloudinary upload signature.
  */
-router.post('/signature', cloudinaryValidators.getSignatureValidator, cloudinaryControllers.getSignature);
+router.get('/signature', cloudinaryControllers.getSignature);
 
 /**
  * Route to delete an asset from Cloudinary.

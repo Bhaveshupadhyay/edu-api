@@ -31,7 +31,7 @@ export const handleAdminRefreshToken = asyncHandler(async (req, res) => {
       throw createError("Access Denied / Unauthorized user", 401);
     }
 
-    const { accessToken } = generateTokens(foundUser.id);
+    const { accessToken } = generateTokens(foundUser.id, 'ADMIN');
 
     return res.json({
       isSuccess: true,
@@ -70,7 +70,7 @@ export const handleRefreshToken = asyncHandler(async (req, res) => {
       throw createError("Access Denied / Unauthorized user", 401);
     }
 
-    const { accessToken } = generateTokens(foundUser.id);
+    const { accessToken } = generateTokens(foundUser.id, 'USER');
 
     return res.json({
       isSuccess: true,

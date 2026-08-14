@@ -1,3 +1,8 @@
+export const UserRole = {
+  ADMIN: 'ADMIN',
+  USER: 'USER'
+}
+
 export const UIStyle = {
   GRID: 'grid',
   LIST: 'list',

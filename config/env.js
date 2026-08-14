@@ -32,20 +32,7 @@ export const {
   CLOUDINARY_CLOUD_NAME,
   CLOUDINARY_API_KEY,
   CLOUDINARY_API_SECRET,
-  FIREBASE_SERVICE_ACCOUNT_PATH,
-  FIREBASE_CREDENTIALS,
-  FIREBASE_SERVICE_ACCOUNT,
-  type,
-  project_id,
-  private_key_id,
-  private_key,
-  client_email,
-  client_id,
-  auth_uri,
-  token_uri,
-  auth_provider_x509_cert_url,
-  client_x509_cert_url,
-  universe_domain
+  FIREBASE_CREDENTIALS
 } = process.env;
 
 export const PORT = process.env.PORT || 3000;

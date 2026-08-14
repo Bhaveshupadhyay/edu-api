@@ -21,9 +21,9 @@ import webLinkRouter from "./routes/website.link.routes.js";
 import paymentRouter from "./routes/payment.routes.js";
 import deleteRouter from "./routes/delete.routes.js";
 import notificationRouter from "./routes/notification.routes.js";
+import cloudinaryRouter from "./routes/cloudinary.routes.js";
 
 import errorMiddleware from "./middleware/error.middleware.js";
-import resetMiddleware from "./middleware/reset.middleware.js";
 
 import { corsOptions } from "./config/corsOptions.js";
 
@@ -56,10 +56,11 @@ app.get('/health', (_req, res) => res.json({ ok: true }));
 app.use("/api/v1/auth", authRouter);
 app.use("/api/v1/refresh", refreshRouter);
 app.use("/api/v1/mail", verifyRouter);
-app.use("/api/v1/forget", resetMiddleware, forgetRouter);
+app.use("/api/v1/forget", forgetRouter);
 app.use("/api/v1/users", userRouter);
 app.use("/api/v1/devices", devicesRouter);
 app.use("/api/v1/profile", profileRouter);
+app.use("/api/v1/cloudinary", cloudinaryRouter);
 
 app.use("/api/v1/payments", paymentRouter);
 app.use("/api/v1/logout", logoutRouter);

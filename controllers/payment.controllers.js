@@ -144,7 +144,7 @@ export const get_token_verified = asyncHandler(async (req, res) => {
 
   await redisClient.setex(`user_profile:${userId}`, 3600, JSON.stringify(userData));
 
-  const { accessToken, refreshToken } = generateTokens(userId);
+  const { accessToken, refreshToken } = generateTokens(userId, 'USER');
   setTokenCookie(res, refreshToken);
 
   return sendSuccess(res, {

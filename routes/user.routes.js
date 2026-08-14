@@ -16,6 +16,9 @@ import { userValidator } from "../validators/user.validators.js";
 import authMiddleware from "../middleware/auth.middleware.js";
 import { cacheMiddleware } from "../middleware/cache.middleware.js";
 
+import authorizeRoles from "../middleware/role.middleware.js";
+import { UserRole } from "../utils/enums.js";
+
 const userRouter = Router();
 
 // Get users plans
@@ -33,15 +36,12 @@ userRouter.get("/nav-pill/:nav_pill_id", userValidator.getNavPillById, get_nav_p
 userRouter.get("/section/:section_id", userValidator.getSectionById, get_section_content);
 
 // Get module with lessons (paginated)
-userRouter.get("/modules-lessons/:module_id", authMiddleware, userValidator.getModulesLessons, getModulesLessonsData);
+userRouter.get("/modules-lessons/:module_id", authMiddleware, authorizeRoles(UserRole.USER), userValidator.getModulesLessons, getModulesLessonsData);
 
 // Get individual lesson data
-userRouter.get("/lesson/:video_provider_id/:ui_style", authMiddleware, userValidator.getLessonData, get_lesson_data);
+userRouter.get("/lesson/:video_provider_id/:ui_style", authMiddleware, authorizeRoles(UserRole.USER), userValidator.getLessonData, get_lesson_data);
 
 // Get user's latest subscription details
-userRouter.get("/latest-subscription",
-  authMiddleware,
-  get_latest_subscription
-);
+userRouter.get("/latest-subscription", authMiddleware, authorizeRoles(UserRole.USER), get_latest_subscription);
 
 export default userRouter;

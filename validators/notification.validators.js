@@ -9,9 +9,9 @@ export const notificationValidators = {
       .withMessage("Please add some meaningful title")
       .bail()
       .isLength({ min: 2 })
-      .withMessage("Please add a title"),
+      .withMessage("Please add at least 2 words"),
 
-    body("messag")
+    body("message")
       .trim()
       .notEmpty()
       .withMessage("Please add a message")
@@ -20,6 +20,6 @@ export const notificationValidators = {
       .withMessage("Please add some meaningful messag")
       .bail()
       .isLength({ min: 2 })
-      .withMessage("Please add a message")
+      .withMessage("Please add at least 2 words")
   ]
 };

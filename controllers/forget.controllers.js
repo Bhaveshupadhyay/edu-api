@@ -39,7 +39,7 @@ export const resetPassword = asyncHandler(async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const { accessToken, refreshToken } = generateTokens(user.id);
+    const { accessToken, refreshToken } = generateTokens(user.id, 'USER');
 
     const [updateResult] = await connection.query(
       "UPDATE users SET password = ? WHERE id = ?",

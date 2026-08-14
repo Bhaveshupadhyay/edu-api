@@ -151,7 +151,7 @@ const syncAuthBackend = async (req, res, emailInput, deviceIdInput, deviceTypeIn
         }
       }
 
-      const { accessToken, refreshToken } = generateTokens(userId);
+      const { accessToken, refreshToken } = generateTokens(userId, 'USER');
       setTokenCookie(res, refreshToken);
 
       let currentDeviceCount = 0;
@@ -323,7 +323,7 @@ export const signInAdmin = asyncHandler(async (req, res) => {
     throw createError("Invalid email or password", 401);
   }
 
-  const { accessToken, refreshToken } = generateTokens(admin.id);
+  const { accessToken, refreshToken } = generateTokens(admin.id, 'ADMIN');
   await db.query("UPDATE admin SET rem_token = ? WHERE id = ?", [refreshToken, admin.id]);
   setTokenCookie(res, refreshToken);
 
