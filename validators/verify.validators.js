@@ -17,13 +17,15 @@ export const otpValidator = {
 			.matches(/^[^<>]*$/)
 			.withMessage("Invalid OTP"),
 	]
-  
-	// websiteLink: [
-	// 	body("token")
-	// 		.trim()
-	// 		.notEmpty()
-	// 		.withMessage("OTP required")
-	// 		.matches(/^[^<>]*$/)
-	// 		.withMessage("Invalid OTP"),
-	// ]
-}
+};
+
+export const emailVerificationValidator = {
+	sendVerification: [
+		body("email")
+			.optional()
+			.trim()
+			.isEmail()
+			.withMessage("Invalid email")
+			.normalizeEmail(),
+	]
+};

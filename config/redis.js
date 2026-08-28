@@ -2,20 +2,22 @@ import Redis from "ioredis";
 import logger from "../libs/logger.js";
 import { RPASSWORD, HOST } from "./env.js";
 
-const redisClient = new Redis({
+// BullMQ and ioredis setup
+const redisConfig = {
     host: HOST,
-    password: RPASSWORD,
     port: 6379,
-    maxRetriesPerRequest: null,
-    retryStrategy: (times) => {
+    password: RPASSWORD,
+    maxRetriesPerRequest: null, // REQUIRED for BullMQ
+    reconnectStrategy: (times) => {
         if (times > 10) {
-            logger.error("Redis max retries reached. Connection failed.");
-            return null; // Stop retrying
+            logger.error("Redis max retries reached.");
+            return null; // stop retrying
         }
-        return Math.min(times * 100, 3000); // Exponential backoff
+        return Math.min(times * 100, 3000);
     },
-    connectTimeout: 10000
-});
+};
+
+const redisClient = new Redis(redisConfig);
 
 redisClient.on('error', (err) => logger.error('Redis Client Error', err));
 redisClient.on('connect', () => logger.info('Redis Client Connecting...'));

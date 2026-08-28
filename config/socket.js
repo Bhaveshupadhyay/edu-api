@@ -2,6 +2,7 @@ import { createRequire } from "module";
 import logger from "../libs/logger.js";
 import dbConnectionPromise from "./db.js";
 import redisClient from "./redis.js";
+import { generateDeviceFingerprint } from "../utils/authHelper.js";
 
 const require = createRequire(import.meta.url);
 const deviceToSocketMap = new Map();
@@ -43,9 +44,10 @@ const socketIO = {
 
             socket.on('register', async ({ deviceID }) => {
               try {
+                const deviceFp = deviceID ? (/^[a-f0-9]{64}$/i.test(deviceID) ? deviceID : generateDeviceFingerprint(deviceID)) : null;
                 const [[device]] = await dbConnection.query(
-                  "SELECT user_id FROM user_devices WHERE device_id = ? LIMIT 1",
-                  [deviceID]
+                  "SELECT user_id FROM user_devices WHERE device_fingerprint = ? OR device_fingerprint = ? LIMIT 1",
+                  [deviceFp, deviceID]
                 );
 
                 if (!device) {
@@ -57,6 +59,9 @@ const socketIO = {
                 
                 // Join specific device room
                 socket.join(`device_${deviceID}`);
+                if (deviceFp && deviceFp !== deviceID) {
+                  socket.join(`device_${deviceFp}`);
+                }
 
                 // Join user-wide room if user_id exists
                 if (device.user_id) {

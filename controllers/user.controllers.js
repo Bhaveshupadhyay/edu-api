@@ -15,7 +15,7 @@ import {
   sendCursorPaginatedResponse
 } from '../utils/paginationHelper.js';
 
-import { getOrSetCache } from "../utils/cache.js";
+import { getOrSetCache, clearCache } from "../utils/cache.js";
 import { isReviewer } from "../utils/authHelper.js";
 
 const vimeoClient = new Vimeo(null, null, IDENTIFIER);
@@ -28,21 +28,21 @@ const fetchVimeoVideoData = async (videoId) => {
       method: 'GET',
       path: `/videos/${videoId}`,
       query: {
-        fields: 'files,duration,pictures'
+        fields: 'files,duration'
       }
     }, function (error, body) {
       if (error) {
         logger.error('Error fetching video data from Vimeo:', error);
         return resolve({
           isSuccess: true,
-          data: { id: videoId, files: [], duration: "", thumbnail: "" }
+          data: { id: videoId, files: [], duration: "" }
         });
       }
 
       if (!body.files || body.files.length === 0) {
         return resolve({
           isSuccess: true,
-          data: { id: videoId, files: [], duration: "", thumbnail: "" }
+          data: { id: videoId, files: [], duration: "" }
         });
       }
 
@@ -56,8 +56,8 @@ const fetchVimeoVideoData = async (videoId) => {
         data: {
           id: videoId,
           files: videoFiles,
-          duration: body?.duration,
-          thumbnail: body?.pictures?.base_link
+          duration: body?.duration
+          // thumbnail: body?.pictures?.base_link
         }
       });
     });
@@ -351,23 +351,25 @@ export const getModulesLessonsData = asyncHandler(async (req, res) => {
   
   const hasAccess = moduleInfo.is_free === 1 || hasActiveSub || isUserReviewer;
 
-  const cacheKey = `cache:/api/v1/users/modules-lessons/${module_id}:limit=${limit}:cursor=${cursor || 'start'}:syllabus=${syllabus_id || 'all'}:access=${hasAccess}:rev=${isUserReviewer}`;
+  const cacheKey = `cache:/api/v1/users/modules-lessons/${module_id}:limit=${limit}:cursor=${cursor || 'start'}:syllabus=${syllabus_id || 'all'}:access=${hasAccess}:rev=${isUserReviewer}:user=${user_id || 'anon'}`;
 
   const result = await getOrSetCache(cacheKey, async () => {
-    // 2. Optimized: Fetch all syllabus and their top lessons in ONE query
+    // 2. Optimized: Fetch all syllabus and their top lessons with continue watching progress in ONE query
     let query = `
       SELECT * FROM (
         SELECT 
           s.id as syllabus_id, s.title as syllabus_title, s.workout_instructions as syllabus_workout_instructions, s.position as s_position,
-          l.id as lesson_id, l.title as lesson_title, l.workout_instructions as lesson_workout_instructions, l.position as l_position, v.video_provider_id, v.ui_style,
+          l.id as lesson_id, l.title as lesson_title, l.workout_instructions as lesson_workout_instructions, l.position as l_position, 
+          v.video_provider_id, v.ui_style, cw.video_id, cw.is_completed,
           ROW_NUMBER() OVER (PARTITION BY s.id ORDER BY l.position ASC) as lesson_rank
         FROM syllabus s
         LEFT JOIN lessons l ON s.id = l.syllabus_id
         LEFT JOIN videos v ON l.id = v.lesson_id
+        LEFT JOIN continue_watching cw ON v.id = cw.video_id AND cw.user_id = ?
         WHERE s.module_id = ?
     `;
     
-    const queryParams = [module_id];
+    const queryParams = [user_id || 0, module_id];
     
     if (syllabus_id) {
       query += " AND s.id = ?";
@@ -411,10 +413,13 @@ export const getModulesLessonsData = asyncHandler(async (req, res) => {
             workout_instructions: row.lesson_workout_instructions
           };
           
-          // Only provide video data if user has access
+          // Only provide video and continue watching data if user has access
           if (hasAccess) {
+            lesson.video_id = row.video_id;
             lesson.video_provider_id = row.video_provider_id;
             lesson.ui_style = row.ui_style;
+            lesson.last_position_ms = row.last_position_ms !== null ? Number(row.last_position_ms) : 0;
+            lesson.is_completed = row.is_completed !== null ? Boolean(row.is_completed) : false;
           }
 
           s.lessons.push(lesson);
@@ -442,13 +447,14 @@ export const get_lesson_data = asyncHandler(async (req, res) => {
   const user_id = req.user?.id;
   const db = await dbConnectionPromise;
 
-  // 1. Check if the module containing this video is free and get workout instructions
+  // 1. Check if the module containing this video is free and get thumbnail
   const [[accessInfo]] = await db.query(`
-    SELECT m.is_free 
+    SELECT m.is_free, v.thumbnail_url, cw.last_position_ms 
     FROM videos v
     JOIN lessons l ON v.lesson_id = l.id
     JOIN syllabus s ON l.syllabus_id = s.id
     JOIN modules m ON s.module_id = m.id
+    LEFT JOIN continue_watching cw ON v.id = cw.video_id
     WHERE v.video_provider_id = ? AND m.is_active = 1
     LIMIT 1
   `, [video_provider_id]);
@@ -482,7 +488,9 @@ export const get_lesson_data = asyncHandler(async (req, res) => {
 
   return sendSuccess(res, { 
     ...videoData, 
-    ui_style
+    ui_style,
+    thumbnail: accessInfo?.thumbnail_url,
+    watch_time: accessInfo?.last_position_ms
   });
 });
 
@@ -516,5 +524,229 @@ export const get_latest_subscription = asyncHandler(async (req, res) => {
 
   return sendSuccess(res, { 
     subscription: subscription || null 
+  });
+});
+
+/**
+ * Update continue watching progress (last_position_ms in milliseconds) for a video (Upsert)
+ */
+export const update_continue_watching = asyncHandler(async (req, res) => {
+  handleValidationErrors(req);
+  const user_id = req.user?.id;
+  if (!user_id) throw createError("Unauthorized", 401);
+
+  const {
+    video_provider_id,
+    last_position_ms,
+    total_duration_ms
+  } = req.body;
+
+  const posMs = last_position_ms !== undefined && last_position_ms !== null ? Math.round(Number(last_position_ms)) : 0;
+  const durMs = total_duration_ms !== undefined && total_duration_ms !== null ? Math.round(Number(total_duration_ms)) : 0;
+
+  if (posMs > durMs) {
+    throw createError("invalid timing", 400);
+  }
+
+  const db = await dbConnectionPromise;
+  let targetVideoId = null;
+
+  if (!targetVideoId && video_provider_id) {
+    const [[v]] = await db.query(
+      "SELECT id FROM videos WHERE video_provider_id = ? LIMIT 1",
+      [video_provider_id]
+    );
+    if (!v) throw createError("Video not found", 404);
+    targetVideoId = v.id;
+  }
+
+  if (!targetVideoId) {
+    throw createError("video_id or video_provider_id is required", 400);
+  }
+
+  // Automatically mark completed if >= 95% watched or explicitly set
+  let completed = 0;
+  if (!completed && durMs > 0 && posMs >= durMs * 0.95) {
+    completed = 1;
+  }
+
+  await db.query(`
+    INSERT INTO continue_watching (user_id, video_id, last_position_ms, total_duration_ms, is_completed, updated_at)
+    VALUES (?, ?, ?, ?, ?, NOW())
+    ON DUPLICATE KEY UPDATE 
+      last_position_ms = VALUES(last_position_ms),
+      total_duration_ms = IF(VALUES(total_duration_ms) > 0, VALUES(total_duration_ms), total_duration_ms),
+      is_completed = VALUES(is_completed),
+      updated_at = NOW()
+  `, [user_id, targetVideoId, posMs, durMs, completed]);
+
+  await clearCache(`continue_watching:${user_id}`);
+
+  return sendSuccess(res, "Continue watching progress updated successfully");
+});
+
+export const save_continue_watching = update_continue_watching;
+
+/**
+ * Get paginated list of continue watching videos for the current user (includes id, video_id, thumbnail, lesson_title, module_id)
+ */
+export const get_continue_watching_list = asyncHandler(async (req, res) => {
+  handleValidationErrors(req);
+  const user_id = req.user?.id;
+  if (!user_id) throw createError("Unauthorized", 401);
+
+  const { limit, cursor } = getCursorPaginationParams(req.query);
+  const db = await dbConnectionPromise;
+
+  let query = `
+    SELECT 
+      cw.id,
+      cw.video_id,
+      v.video_provider_id,
+      v.thumbnail_url as thumbnail,
+      v.ui_style,
+      l.title as lesson_title,
+      m.is_free,
+      cw.last_position_ms,
+      cw.total_duration_ms,
+      cw.is_completed
+    FROM continue_watching cw
+    JOIN videos v ON cw.video_id = v.id
+    JOIN lessons l ON v.lesson_id = l.id
+    JOIN syllabus s ON l.syllabus_id = s.id
+    JOIN modules m ON s.module_id = m.id
+    WHERE cw.user_id = ? AND m.is_active = 1
+  `;
+
+  const queryParams = [user_id];
+
+  if (cursor) {
+    query += ` AND cw.updated_at < (SELECT updated_at FROM continue_watching WHERE id = ?)`;
+    queryParams.push(cursor);
+  }
+
+  query += ` ORDER BY cw.updated_at DESC LIMIT ?`;
+  queryParams.push(limit + 1);
+
+  const [rows] = await db.query(query, queryParams);
+
+  if (!rows || !rows.length) {
+    return sendCursorPaginatedResponse(res, [], { nextCursor: null, hasMore: false });
+  }
+
+  const hasMore = rows.length > limit;
+  const data = hasMore ? rows.slice(0, limit) : rows;
+  const nextCursor = hasMore ? data[data.length - 1].id : null;
+
+  return sendCursorPaginatedResponse(res, data, { nextCursor, hasMore });
+});
+
+/**
+ * Get continue watching details for a single video (including Vimeo video link, table details, and module_id)
+ */
+export const get_continue_watching_by_id = asyncHandler(async (req, res) => {
+  handleValidationErrors(req);
+  const user_id = req.user?.id;
+  if (!user_id) throw createError("Unauthorized", 401);
+
+  const { video_id } = req.params;
+  const db = await dbConnectionPromise;
+
+  // 1. Fetch continue watching record with video, lesson, and module info
+  let [[cw]] = await db.query(`
+    SELECT 
+      cw.video_id,
+      cw.last_position_ms,
+      cw.total_duration_ms,
+      cw.is_completed,
+      cw.updated_at,
+      v.video_provider_id,
+      v.thumbnail_url as thumbnail,
+      v.ui_style,
+      l.title as lesson_title,
+      l.workout_instructions,
+      m.id as module_id,
+      m.is_free
+    FROM continue_watching cw
+    JOIN videos v ON cw.video_id = v.id
+    JOIN lessons l ON v.lesson_id = l.id
+    JOIN syllabus s ON l.syllabus_id = s.id
+    JOIN modules m ON s.module_id = m.id
+    WHERE cw.user_id = ? AND (cw.video_id = ? OR v.video_provider_id = ?)
+    LIMIT 1
+  `, [user_id, video_id, video_id]);
+
+  // If no continue watching record exists, fallback to video table details
+  if (!cw) {
+    const [[videoDetails]] = await db.query(`
+      SELECT 
+        v.id as video_id,
+        v.video_provider_id,
+        v.thumbnail_url as thumbnail,
+        v.ui_style,
+        l.title as lesson_title,
+        l.workout_instructions,
+        m.id as module_id,
+        m.is_free
+      FROM videos v
+      JOIN lessons l ON v.lesson_id = l.id
+      JOIN syllabus s ON l.syllabus_id = s.id
+      JOIN modules m ON s.module_id = m.id
+      WHERE (v.id = ? OR v.video_provider_id = ?) AND m.is_active = 1
+      LIMIT 1
+    `, [video_id, video_id]);
+
+    if (!videoDetails) {
+      throw createError("Video not found", 404);
+    }
+
+    cw = {
+      ...videoDetails,
+      id: null,
+      last_position_ms: 0,
+      total_duration_ms: 0,
+      is_completed: 0,
+      updated_at: null
+    };
+  }
+
+  // 2. Check access permission if module is not free
+  if (cw.is_free !== 1) {
+    const [[user]] = await db.query(`SELECT email FROM users WHERE id = ?`, [user_id]);
+    const isUserReviewer = isReviewer(user?.email);
+
+    if (!isUserReviewer) {
+      const [[subscription]] = await db.query(
+        `SELECT status FROM user_subscriptions 
+         WHERE user_id = ? AND status IN ('active', 'trialing') 
+         AND current_period_end > NOW() LIMIT 1`,
+        [user_id]
+      );
+
+      if (!subscription) throw createError("Active subscription required", 403);
+    }
+  }
+
+  // 3. Fetch Vimeo video links and playback details
+  const cacheKey = `vimeo:${cw.video_provider_id}`;
+  const videoData = await getOrSetCache(cacheKey, async () => {
+    const vimeoResponse = await fetchVimeoVideoData(cw.video_provider_id);
+    return vimeoResponse?.data || null;
+  }, 86400 * 7); // Cache vimeo data for 7 days
+
+  return sendSuccess(res, {
+    ...videoData,
+    id: cw.id,
+    video_id: cw.video_id,
+    video_provider_id: cw.video_provider_id,
+    thumbnail: cw.thumbnail,
+    ui_style: cw.ui_style,
+    lesson_id: cw.lesson_id,
+    lesson_title: cw.lesson_title,
+    workout_instructions: cw.workout_instructions,
+    module_id: cw.module_id,
+    last_position_ms: Number(cw.last_position_ms || 0),
+    total_duration_ms: Number(cw.total_duration_ms || 0),
+    is_completed: Boolean(cw.is_completed)
   });
 });

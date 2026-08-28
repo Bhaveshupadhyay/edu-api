@@ -34,34 +34,18 @@ export const registerValidator = {
 	        return true;
 	      }),
 	    body('device_id')
-		  .custom((value, { req }) => {
-		    const type = req.body.device_type || 'web';
-		    if (['android', 'ios'].includes(type)) {
-		      if (!value || (typeof value === 'string' && !value.trim())) {
-		        throw new Error('Device ID is required for android and ios devices');
-		      }
-		    }
-		    return true;
-		  })
+	      .trim()
+		  .notEmpty()
+		  .withMessage("Device required")
 		  .bail()
-		  .if((value) => value !== undefined && value !== null && value !== '')
-		  .trim()
 		  .isLength({ min: 8, max: 255 })
-		  .withMessage('Invalid Device ID')
+		  .withMessage('Invalid Device value')
 		  .bail()
 		  .matches(/^[^<>]*$/)
-		  .withMessage('Invalid Device ID')
+		  .withMessage('Invalid Device value')
 		  .bail()
 		  .matches(/^[A-Za-z0-9-:_]+$/)
-		  .withMessage('Invalid Device ID'),
-		body("device_type")
-			.optional({ nullable: true, checkFalsy: true })
-			.trim()
-			.isIn(['android', 'ios', 'web'])
-			.withMessage("Invalid device type")
-			.bail()
-			.matches(/^[^<>]*$/)
-			.withMessage("Invalid device type")
+		  .withMessage('Invalid Device value')
   	]
 };
 
@@ -83,34 +67,18 @@ export const loginValidator = {
 	      .matches(/^[^<>]*$/)
 	      .withMessage("Invalid password"),
 	    body('device_id')
-		  .custom((value, { req }) => {
-		    const type = req.body.device_type || req.body.deviceType || 'web';
-		    if (['android', 'ios'].includes(type)) {
-		      if (!value || (typeof value === 'string' && !value.trim())) {
-		        throw new Error('Device ID is required for android and ios devices');
-		      }
-		    }
-		    return true;
-		  })
-		  .bail()
-		  .if((value) => value !== undefined && value !== null && value !== '')
 		  .trim()
+		  .notEmpty()
+		  .withMessage("Device required")
+		  .bail()
 		  .isLength({ min: 8, max: 255 })
-		  .withMessage('Invalid Device ID')
+		  .withMessage('Invalid Device value')
 		  .bail()
 		  .matches(/^[^<>]*$/)
-		  .withMessage('Invalid Device ID')
+		  .withMessage('Invalid Device value')
 		  .bail()
 		  .matches(/^[A-Za-z0-9-:_]+$/)
-		  .withMessage('Invalid Device ID'),
-		body("device_type")
-			.optional({ nullable: true, checkFalsy: true })
-			.trim()
-			.isIn(['android', 'ios', 'web'])
-			.withMessage("Invalid device type")
-			.bail()
-			.matches(/^[^<>]*$/)
-			.withMessage("Invalid device type")
+		  .withMessage('Invalid Device value')
 	],
 
 	admin: [

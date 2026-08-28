@@ -46,3 +46,5 @@ export const verifyOTP = asyncHandler(async (req, res) => {
     token: resetToken
   });
 });
+
+// export { sendEmailVerificationHandler } from "./mail.controllers.js";

@@ -19,5 +19,18 @@ export const passwordValidator = {
 	        }
 	        return true;
 	    }),
+	    body('device_id')
+	      .trim()
+		  .notEmpty()
+		  .withMessage("Device required")
+		  .bail()
+		  .isLength({ min: 8, max: 255 })
+		  .withMessage('Invalid Device value')
+		  .bail()
+		  .matches(/^[^<>]*$/)
+		  .withMessage('Invalid Device value')
+		  .bail()
+		  .matches(/^[A-Za-z0-9-:_]+$/)
+		  .withMessage('Invalid Device value')
 	]
 }

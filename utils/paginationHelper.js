@@ -174,7 +174,8 @@ export const sendSuccess = (res, data, message = '') => {
 /**
  * Send a successful cursor-based paginated response
  */
-export const sendCursorPaginatedResponse = (res, result, { nextCursor, hasMore }) => {
+export const sendCursorPaginatedResponse = (res, result, pagination = {}) => {
+  const { nextCursor = null, hasMore = false } = pagination || {};
   return res.status(200).json({
     isSuccess: true,
     data: result,

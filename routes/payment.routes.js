@@ -14,6 +14,7 @@ import {
 import { subscriptionValidators } from "../validators/payment.validators.js";
 
 import authMiddleware from "../middleware/auth.middleware.js";
+import requireVerifiedEmail from "../middleware/emailVerified.middleware.js";
 
 const paymentRouter = Router();
 
@@ -31,12 +32,14 @@ paymentRouter.get("/plans",
 
 paymentRouter.post("/checkout-options",
   authMiddleware,
+  requireVerifiedEmail,
   subscriptionValidators.checkoutOptions,
   get_checkout_options
 );
 
 paymentRouter.post("/subscribe", 
   authMiddleware,
+  requireVerifiedEmail,
   subscriptionValidators.subscribe,
   post_subscription
 );

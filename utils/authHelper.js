@@ -1,4 +1,5 @@
 import jwt from "jsonwebtoken";
+import crypto from "crypto";
 import {
   ACCESS_TOKEN_SECRET,
   REFRESH_TOKEN_SECRET,
@@ -7,6 +8,82 @@ import {
   NODE_ENV,
   REVIEWER_EMAIL
 } from "../config/env.js";
+
+/**
+ * Calculate device type ('android', 'ios', 'tv', 'web') from user-agent header string.
+ * @param {string} userAgentHeader 
+ * @returns {'android'|'ios'|'tv'|'web'}
+ */
+export const getDeviceTypeFromUserAgent = (userAgentHeader) => {
+  if (!userAgentHeader || typeof userAgentHeader !== 'string') {
+    return 'web';
+  }
+
+  const ua = userAgentHeader.toLowerCase().trim();
+
+  // Direct enum match
+  if (['android', 'ios', 'tv', 'web'].includes(ua)) {
+    return ua;
+  }
+
+  // TV check
+  if (
+    ua.includes('smarttv') ||
+    ua.includes('smart-tv') ||
+    ua.includes('googletv') ||
+    ua.includes('appletv') ||
+    ua.includes('androidtv') ||
+    ua.includes('android tv') ||
+    ua.includes('tizen') ||
+    ua.includes('webos') ||
+    ua.includes('hbbtv') ||
+    ua.includes('roku') ||
+    ua.includes('vizio') ||
+    ua.includes('vidaa') ||
+    ua.includes('aft') ||
+    ua.includes('crkey') ||
+    ua.includes('mibox') ||
+    /\b(tv|dtv)\b/.test(ua)
+  ) {
+    return 'tv';
+  }
+
+  // iOS check
+  if (
+    ua.includes('iphone') ||
+    ua.includes('ipad') ||
+    ua.includes('ipod') ||
+    ua.includes('ios')
+  ) {
+    return 'ios';
+  }
+
+  // Android check
+  if (ua.includes('android')) {
+    return 'android';
+  }
+
+  return 'web';
+};
+
+/**
+ * Generate SHA-256 device fingerprint from raw ID/string or request headers
+ * @param {string} rawFingerprint 
+ * @param {Object} [req] 
+ * @returns {string|null}
+ */
+export const generateDeviceFingerprint = (rawFingerprint, req = null) => {
+  if (rawFingerprint && typeof rawFingerprint === 'string' && rawFingerprint.trim().length > 0) {
+    return crypto.createHash('sha256').update(String(rawFingerprint).trim()).digest('hex');
+  }
+  if (req) {
+    const userAgent = req.headers['user-agent'] || '';
+    const acceptLanguage = req.headers['accept-language'] || '';
+    const ip = req.ip || req.socket?.remoteAddress || req.headers['x-forwarded-for'] || '';
+    return crypto.createHash('sha256').update(`${userAgent}:${acceptLanguage}:${ip}`).digest('hex');
+  }
+  return null;
+};
 
 /**
  * Generate a name from an email address
@@ -86,3 +163,25 @@ export const verifyToken = (token, secret) => {
 export const generateSpecificToken = (payload, secret, expiresIn) => {
   return jwt.sign(payload, secret, { expiresIn });
 };
+
+/**
+ * Check if a given date or timestamp is today (local or UTC)
+ * @param {Date|string|number} date 
+ * @returns {boolean}
+ */
+export const isDateToday = (date) => {
+  if (!date) return false;
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return false;
+  const today = new Date();
+
+  return (
+    (d.getFullYear() === today.getFullYear() &&
+      d.getMonth() === today.getMonth() &&
+      d.getDate() === today.getDate()) ||
+    (d.getUTCFullYear() === today.getUTCFullYear() &&
+      d.getUTCMonth() === today.getUTCMonth() &&
+      d.getUTCDate() === today.getUTCDate())
+  );
+};
+

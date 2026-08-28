@@ -25,7 +25,7 @@ export const sendNotification = asyncHandler(async (req, res) => {
       title: title || "Edu Garcia Movimiento 💪",
       body: message,
     },
-    topic: 'all_users', 
+    topic: 'all', 
   };
 
   try {

@@ -26,7 +26,12 @@ import {
 
 import logger from "../libs/logger.js";
 import { webhookQueue } from "../libs/queue.js";
-import { generateTokens, setTokenCookie, isReviewer } from "../utils/authHelper.js";
+import { 
+  generateTokens, 
+  setTokenCookie, 
+  isReviewer, 
+  generateDeviceFingerprint 
+} from "../utils/authHelper.js";
 
 const stripe = new Stripe(STRIPE_SECRET_KEY);
 
@@ -101,21 +106,23 @@ export const get_token_verified = asyncHandler(async (req, res) => {
 
   const userId = verifiedUser.id;
   const db = await dbConnectionPromise;
-  const [[user]] = await db.query("SELECT id, email FROM users WHERE id = ?", [userId]);
+  const [[user]] = await db.query("SELECT id, email, email_verified FROM users WHERE id = ?", [userId]);
   if (!user) throw createError("Account not found. Please sign up or log in.", 404);
 
   const email = user.email;
   const isUserReviewer = isReviewer(email);
 
-  const [subscriptions] = await db.query(
+  const deviceFingerprint = generateDeviceFingerprint(device_id, req);
+
+  const [subscriptions] = await connection.execute(
     `SELECT up.name as profile_name, up.bio as profile_bio, s.status, s.current_period_end, s.stripe_sub_id, 
-    p.plan_name, p.monthly_price, p.duration_value, p.duration_unit
-     FROM user_subscriptions s
-     JOIN plans p ON s.plan_id = p.id
-     LEFT JOIN user_profiles up ON up.user_id = s.user_id AND up.device_id = ?
-     WHERE s.user_id = ? 
-     ORDER BY s.id DESC LIMIT 1`,
-    [device_id || null, userId]
+      p.plan_name, p.monthly_price, p.max_screens, p.duration_value, p.duration_unit
+      FROM user_subscriptions s
+      JOIN plans p ON s.plan_id = p.id
+      LEFT JOIN user_profiles up ON up.user_id = s.user_id AND up.device_fingerprint = ?
+      WHERE s.user_id = ? 
+      ORDER BY s.id DESC LIMIT 1`,
+    [deviceFingerprint, userId]
   );
 
   const sub = subscriptions[0];
@@ -126,6 +133,7 @@ export const get_token_verified = asyncHandler(async (req, res) => {
 
   const userData = {
     email: email,
+    email_verified: isUserReviewer ? true : Boolean(user?.email_verified),
     profile_name: sub?.profile_name || 'Member', 
     profile_bio: sub?.profile_bio || null,
     is_subscribed: hasActiveSub ? 1 : 0,
@@ -222,9 +230,10 @@ export const post_subscription = asyncHandler(async (req, res) => {
   }
 
   // Verify device ownership
+  const deviceFp = device_id ? (/^[a-f0-9]{64}$/i.test(device_id) ? device_id : generateDeviceFingerprint(device_id)) : null;
   const [[deviceFound]] = await db.query(
-    "SELECT 1 FROM user_devices WHERE user_id = ? AND device_id = ? LIMIT 1",
-    [user_id, device_id]
+    "SELECT 1 FROM user_devices WHERE user_id = ? AND (device_fingerprint = ? OR device_fingerprint = ?) LIMIT 1",
+    [user_id, deviceFp, device_id]
   );
   if (!deviceFound) {
     throw createError("Your device could not be verified. Please log in again to continue.", 403);

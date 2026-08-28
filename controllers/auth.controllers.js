@@ -6,7 +6,8 @@ import crypto from "crypto";
 import {
   OTP_TOKEN_SECRET,
   OTP_EXPIRES_IN,
-  STRIPE_SECRET_KEY
+  STRIPE_SECRET_KEY,
+  SHORT_TOKEN_SECRET
 } from "../config/env.js";
 import logger from "../libs/logger.js";
 import stripe from "stripe";
@@ -27,57 +28,34 @@ import {
   generateTokens, 
   setTokenCookie, 
   generateNameFromEmail, 
-  isReviewer 
+  isReviewer,
+  generateDeviceFingerprint,
+  getDeviceTypeFromUserAgent,
+  generateSpecificToken,
+  isDateToday
 } from '../utils/authHelper.js';
 import redisClient from "../config/redis.js";
 import { clearCache } from "../utils/cache.js";
+import { sendOtpEmail, sendWelcomeEmail, sendVerificationEmail } from "./mail.controllers.js";
 
 function generateSecureOTP() {
   const otp = crypto.randomInt(10000, 100000); 
   return otp.toString();
 }
 
-function generateDeviceFingerprint(req) {
-  const userAgent = req.headers['user-agent'] || '';
-  const acceptLanguage = req.headers['accept-language'] || '';
-  const ip = req.ip || req.connection?.remoteAddress || req.headers['x-forwarded-for'] || ''; 
-
-  const rawString = `${userAgent}:${acceptLanguage}:${ip}`;
-  return crypto.createHash('sha256').update(rawString).digest('hex');
-}
-
 /**
  * Core Auth Sync Logic (Used by login/register flows)
  */
-const syncAuthBackend = async (req, res, emailInput, deviceIdInput, deviceTypeInput, password, isRegistration = false) => {
-  const email = emailInput || "";
-  const type = ['android', 'ios', 'web'].includes(deviceTypeInput) ? deviceTypeInput : 'web';
-  
-  if (['android', 'ios'].includes(type) && (!deviceIdInput || (typeof deviceIdInput === 'string' && !deviceIdInput.trim()))) {
-    return res.status(400).json({
-      isSuccess: false,
-      message: "Device ID is required for android and ios devices"
-    });
-  }
-
-  if (deviceIdInput && (/<[^>]*>/g.test(deviceIdInput) || /[^A-Za-z0-9-:_]/.test(deviceIdInput))) {
-    return res.status(400).json({
-      isSuccess: false,
-      message: "Invalid Device ID"
-    });
-  }
-
-  // For web (or when device_id is omitted), use SHA-256 fingerprint hash; for mobile (android/ios), use supplied ID (android_id / IDFV)
-  let deviceId = deviceIdInput;
-  if (type === 'web' || !deviceId) {
-    deviceId = deviceId || generateDeviceFingerprint(req);
-  }
+const syncAuthBackend = async (req, res, emailInput, rawFingerprint, password, isRegistration = false) => {
+  const email = (emailInput || "").toLowerCase();
+  const type = getDeviceTypeFromUserAgent(req.headers['user-agent']);
+  const deviceFingerprint = generateDeviceFingerprint(rawFingerprint, req);
 
   try {
     const result = await withTransaction(dbConnectionPromise, async (connection) => {
       
       // 1. Initial Check based on Email
-      const [users] = await connection.execute("SELECT * FROM users WHERE email = ?", [email]);
+      const [users] = await connection.execute("SELECT * FROM users WHERE email = ? LIMIT 1", [email]);
       
       if (isRegistration && users.length > 0) {
         return { error: "Account already exists. Please try again later.", status: 400 };
@@ -94,24 +72,24 @@ const syncAuthBackend = async (req, res, emailInput, deviceIdInput, deviceTypeIn
       if (isRegistration) {
         // Handle Registration
         if (!password) {
-            return { error: "Password is required for registration", status: 400 };
+          return { error: "Password is required for registration", status: 400 };
         }
         const hashedPassword = await bcrypt.hash(password, 10);
 
         try {
-            const customers = await stripeInstance.customers.list({ email, limit: 1 });
-            if (customers.data.length > 0) {
-              stripeCustomerId = customers.data[0].id;
-            } else {
-              const customer = await stripeInstance.customers.create({
-                email,
-                name: generateNameFromEmail(email)
-              });
-              stripeCustomerId = customer.id;
-            }
+          const customers = await stripeInstance.customers.list({ email, limit: 1 });
+          if (customers.data.length > 0) {
+            stripeCustomerId = customers.data[0].id;
+          } else {
+            const customer = await stripeInstance.customers.create({
+              email,
+              name: generateNameFromEmail(email)
+            });
+            stripeCustomerId = customer.id;
+          }
         } catch (stripeErr) {
-            logger.error("Stripe customer operation failed", { error: stripeErr.message });
-            return { error: `Payment setup failed: ${stripeErr.message}`, status: 400 };
+          logger.error("Stripe customer operation failed", { error: stripeErr.message });
+          return { error: `Payment setup failed: ${stripeErr.message}`, status: 400 };
         }
 
         const [insertResult] = await connection.execute(
@@ -126,85 +104,77 @@ const syncAuthBackend = async (req, res, emailInput, deviceIdInput, deviceTypeIn
         userId = user.id;
 
         if (password) {
-            const isMatch = await bcrypt.compare(password, user.password);
-            if (!isMatch) {
-                return { error: "Incorrect email or password. Please try again.", status: 401 };
-            }
+          const isMatch = await bcrypt.compare(password, user.password);
+          if (!isMatch) {
+            return { error: "Incorrect email or password. Please try again.", status: 401 };
+          }
         }
 
         if (!stripeCustomerId) {
-            try {
-                const customers = await stripeInstance.customers.list({ email, limit: 1 });
-                if (customers.data.length > 0) {
-                    stripeCustomerId = customers.data[0].id;
-                } else {
-                    const customer = await stripeInstance.customers.create({
-                        email,
-                        name: generateNameFromEmail(email)
-                    });
-                    stripeCustomerId = customer.id;
-                }
-                await connection.execute("UPDATE users SET stripe_customer_id = ? WHERE id = ?", [stripeCustomerId, userId]);
-            } catch (stripeErr) {
-                logger.error("Stripe sync failed during login", { error: stripeErr.message });
+          try {
+            const customers = await stripeInstance.customers.list({ email, limit: 1 });
+            if (customers.data.length > 0) {
+              stripeCustomerId = customers.data[0].id;
+            } else {
+              const customer = await stripeInstance.customers.create({
+                email,
+                name: generateNameFromEmail(email)
+              });
+              stripeCustomerId = customer.id;
             }
+            await connection.execute("UPDATE users SET stripe_customer_id = ? WHERE id = ?", [stripeCustomerId, userId]);
+          } catch (stripeErr) {
+            logger.error("Stripe sync failed during login", { error: stripeErr.message });
+          }
         }
       }
 
+      // Generate JWT tokens and set refresh token cookie
       const { accessToken, refreshToken } = generateTokens(userId, 'USER');
       setTokenCookie(res, refreshToken);
 
-      let currentDeviceCount = 0;
-      if (deviceId) {
-        // Normalize device type to match enum: 'android', 'ios', 'web', 'tv'
-        const type = ['android', 'ios', 'web', 'tv'].includes(deviceTypeInput) ? deviceTypeInput : 'web';
+      // Check if device already exists for this user in user_devices
+      const [[existingDevice]] = await connection.execute(
+        "SELECT 1 FROM user_devices WHERE user_id = ? AND device_fingerprint = ? LIMIT 1",
+        [userId, deviceFingerprint]
+      );
 
-        // Check if device already exists for this user
-        const [[existingDevice]] = await connection.execute(
-          "SELECT 1 FROM user_devices WHERE user_id = ? AND device_id = ? LIMIT 1",
-          [userId, deviceId]
+      if (!existingDevice) {
+        // Device does not exist for this user, insert new device
+        await connection.execute(
+          `INSERT INTO user_devices (user_id, device_fingerprint, device_type, rem_token, seen_at) 
+           VALUES (?, ?, ?, ?, NOW())`,
+          [userId, deviceFingerprint, type, refreshToken]
         );
-
-        if (!existingDevice) {
-          // Device does not exist for this user, insert new device
-          await connection.execute(
-            `INSERT INTO user_devices (user_id, device_id, device_type, rem_token) VALUES (?, ?, ?, ?)`,
-            [userId, deviceId, type, refreshToken]
-          );
-        } else {
-          // Device already exists for this user, update refresh token and device type without duplicate insertion
-          await connection.execute(
-            `UPDATE user_devices SET rem_token = ?, device_type = ? WHERE user_id = ? AND device_id = ?`,
-            [refreshToken, type, userId, deviceId]
-          );
-        }
-        
-        const [[{ count }]] = await connection.execute(
-          "SELECT COUNT(*) as count FROM user_devices WHERE user_id = ?",
-          [userId]
+      } else {
+        // Device already exists for this user, update refresh token, device_type and seen_at
+        await connection.execute(
+          `UPDATE user_devices 
+           SET rem_token = ?, device_type = ?, seen_at = NOW() 
+           WHERE user_id = ? AND device_fingerprint = ?`,
+          [refreshToken, type, userId, deviceFingerprint]
         );
-        currentDeviceCount = count;
+      }
 
-        await Promise.all([
-          clearCache(`user_session:${userId}:${deviceId}`),
-          clearCache(`user_devices:${userId}`),
-          clearCache(`user_profile:${userId}`),
-          clearCache(`user_profiles:${userId}`)
-        ]);
+      await Promise.all([
+        clearCache(`user_session:${userId}:${deviceFingerprint}`),
+        clearCache(`user_devices:${userId}`),
+        clearCache(`user_profile:${userId}`),
+        clearCache(`user_profiles:${userId}`)
+      ]);
 
-        const [[existingProfile]] = await connection.execute(
-          "SELECT 1 FROM user_profiles WHERE user_id = ? AND device_id = ? LIMIT 1",
-          [userId, deviceId]
+      const [[existingProfile]] = await connection.execute(
+        "SELECT 1 FROM user_profiles WHERE user_id = ? AND device_fingerprint = ? LIMIT 1",
+        [userId, deviceFingerprint]
+      );
+
+      if (!existingProfile) {
+        await connection.execute(
+          `INSERT INTO user_profiles (user_id, device_fingerprint, name) 
+           VALUES (?, ?, ?)
+           ON DUPLICATE KEY UPDATE name = name`,
+          [userId, deviceFingerprint, 'Member']
         );
-
-        if (!existingProfile) {
-          await connection.execute(
-            `INSERT INTO user_profiles (user_id, device_id, name) 
-             VALUES (?, ?, ?)
-             ON DUPLICATE KEY UPDATE name = name`,
-            [userId, deviceId, 'Member']
-          );
-        }
       }
 
       const isUserReviewer = isReviewer(email);
@@ -215,10 +185,10 @@ const syncAuthBackend = async (req, res, emailInput, deviceIdInput, deviceTypeIn
           p.plan_name, p.monthly_price, p.max_screens, p.duration_value, p.duration_unit
           FROM user_subscriptions s
           JOIN plans p ON s.plan_id = p.id
-          LEFT JOIN user_profiles up ON up.user_id = s.user_id AND up.device_id = ?
+          LEFT JOIN user_profiles up ON up.user_id = s.user_id AND up.device_fingerprint = ?
           WHERE s.user_id = ? 
           ORDER BY s.id DESC LIMIT 1`,
-        [deviceId, userId]
+        [deviceFingerprint, userId]
       );
 
       const sub = subscriptions[0];
@@ -226,19 +196,52 @@ const syncAuthBackend = async (req, res, emailInput, deviceIdInput, deviceTypeIn
       const isValidStatus = sub && ['active', 'trialing'].includes(sub.status);
       const isNotExpired = sub && new Date(sub.current_period_end) > nowTime;
       const hasActiveSub = (isValidStatus && isNotExpired) || isUserReviewer;
+      const maxScreens = sub?.max_screens || 1;
 
-      // console.log(currentDeviceCount);
+      // Fetch all devices for this user ordered by seen_at
+      const [allDevices] = await connection.execute(
+        "SELECT device_fingerprint, device_type, seen_at FROM user_devices WHERE user_id = ? ORDER BY seen_at ASC",
+        [userId]
+      );
 
+      // Web devices do NOT count towards the device limit
+      const nonWebDevices = allDevices.filter(d => d.device_type !== 'web');
+      const currentDeviceCount = nonWebDevices.length;
+
+      // If device limit exceeds, auto remove web devices according to seen_at
       if (hasActiveSub && !isUserReviewer) {
-        const maxScreens = sub.max_screens || 1;
+        const webDevices = allDevices.filter(d => d.device_type === 'web');
+
+        // If total devices exceed maxScreens, auto remove oldest web devices (do not delete if seen today)
+        if (allDevices.length > maxScreens && webDevices.length > 0) {
+          let hasDeletedWebDev = false;
+          for (const webDev of webDevices) {
+            if (isDateToday(webDev.seen_at)) {
+              continue;
+            }
+            await connection.execute(
+              "DELETE FROM user_devices WHERE user_id = ? AND device_fingerprint = ?",
+              [userId, webDev.device_fingerprint]
+            );
+            await connection.execute(
+              "DELETE FROM user_profiles WHERE user_id = ? AND device_fingerprint = ?",
+              [userId, webDev.device_fingerprint]
+            );
+            hasDeletedWebDev = true;
+          }
+          if (hasDeletedWebDev) {
+            await clearCache(`user_devices:${userId}`);
+          }
+        }
+
         if (currentDeviceCount > maxScreens) {
           authReasonCode = 2; // Device limit reached
         }
       }
 
       const userData = {
-        // id: userId,
         email: email,
+        email_verified: isUserReviewer ? true : Boolean(user?.email_verified),
         profile_name: sub?.profile_name || 'Member', 
         profile_bio: sub?.profile_bio || null,
         is_subscribed: hasActiveSub ? 1 : 0,
@@ -259,6 +262,7 @@ const syncAuthBackend = async (req, res, emailInput, deviceIdInput, deviceTypeIn
 
       return {
         user: userData,
+        userId,
         accessToken,
         reasonCode: authReasonCode || 1
       };
@@ -269,6 +273,23 @@ const syncAuthBackend = async (req, res, emailInput, deviceIdInput, deviceTypeIn
         isSuccess: false,
         message: result.error,
         ...(result.reasonCode && { reasonCode: result.reasonCode })
+      });
+    }
+
+    // Send welcome email after sign-in / registration
+    sendWelcomeEmail(email, result.user?.profile_name).catch((err) => {
+      logger.error("Welcome email delivery failed", { email, error: err.message });
+    });
+
+    // Send email verification link on new registration (10-minute expiry)
+    if (isRegistration && result.userId) {
+      const verificationToken = generateSpecificToken(
+        { id: result.userId, email, purpose: 'email_verification' },
+        SHORT_TOKEN_SECRET,
+        '10m'
+      );
+      sendVerificationEmail(email, verificationToken, type, result.user?.profile_name).catch((err) => {
+        logger.error("Verification email delivery failed on registration", { email, error: err.message });
       });
     }
 
@@ -289,26 +310,33 @@ const syncAuthBackend = async (req, res, emailInput, deviceIdInput, deviceTypeIn
 
 export const signUp = asyncHandler(async (req, res) => {
   handleValidationErrors(req);
-  const { email, password, device_id, device_type } = req.body;
-  return await syncAuthBackend(req, res, email, device_id, device_type, password, true);
+  const { email, password, device_id } = req.body;
+  return await syncAuthBackend(req, res, email, device_id, password, true);
 });
 
 export const signIn = asyncHandler(async (req, res) => {
   handleValidationErrors(req);
-  const { email, password, device_id, device_type } = req.body;
-  return await syncAuthBackend(req, res, email, device_id, device_type, password, false);
+  const { email, password, device_id } = req.body;
+  return await syncAuthBackend(req, res, email, device_id, password, false);
 });
 
 export const sendOTP = asyncHandler(async (req, res) => {
   handleValidationErrors(req);
-  const email = req.body.email?.toLowerCase();
+  const {email} = req.body;
   const db = await dbConnectionPromise;
   const [[user]] = await db.query("SELECT id FROM users WHERE email = ? LIMIT 1", [email]);
   if (!user) throw createError("User not found", 404);
 
   const otp = generateSecureOTP();
   const otpToken = jwt.sign({ id: user.id, number: otp }, OTP_TOKEN_SECRET, { expiresIn: OTP_EXPIRES_IN });
-  console.log(`OTP for ${email}: ${otp}`);
+
+  // Send OTP via mail
+  try {
+    await sendOtpEmail(email, otp);
+  } catch (mailErr) {
+    logger.error("Failed to send OTP email", { email, error: mailErr.message });
+  }
+
   return res.status(200).json({ isSuccess: true, token: otpToken });
 });
 
@@ -328,4 +356,100 @@ export const signInAdmin = asyncHandler(async (req, res) => {
   setTokenCookie(res, refreshToken);
 
   return sendSuccess(res, { token: accessToken }, "successfully logged in");
+});
+
+/**
+ * Controller to send or resend email verification link with a 10-minute token
+ */
+export const sendVerificationEmailController = asyncHandler(async (req, res) => {
+  handleValidationErrors(req);
+
+  const type = getDeviceTypeFromUserAgent(req.headers['user-agent']);
+
+  const { email } = req.body;
+  if (!email) {
+    throw createError("Email address is required", 400);
+  }
+
+  const db = await dbConnectionPromise;
+  const [[user]] = await db.query(
+    "SELECT id, email_verified FROM users WHERE email = ? LIMIT 1",
+    [email]
+  );
+
+  if (!user) {
+    throw createError("User account not found", 404);
+  }
+
+  if (user.email_verified) {
+    return sendSuccess(res, { email_verified: true }, "Email is already verified.");
+  }
+
+  const verificationToken = generateSpecificToken(
+    { id: user.id, email, purpose: 'email_verification' },
+    SHORT_TOKEN_SECRET,
+    '10m'
+  );
+
+  const result = await sendVerificationEmail(
+    email,
+    type,
+    verificationToken
+  );
+
+  if (!result.isSuccess) {
+    throw createError("Failed to send verification email. Please try again later.", 500);
+  }
+
+  return sendSuccess(res, { message: "Verification email sent successfully." });
+});
+
+/**
+ * Controller to verify email after verifyEmailMiddleware checks token expiration/validity
+ */
+export const verifyEmailController = asyncHandler(async (req, res) => {
+  const userId = req.user?.id;
+
+  if (!userId) {
+    throw createError("Unauthorized / User ID missing from token", 401);
+  }
+
+  const db = await dbConnectionPromise;
+
+  const [[user]] = await db.query(
+    "SELECT email, email_verified FROM users WHERE id = ? LIMIT 1",
+    [userId]
+  );
+
+  if (!user) {
+    throw createError("User account not found.", 404);
+  }
+
+  await db.query(
+    "UPDATE users SET email_verified = 1 WHERE id = ?",
+    [userId]
+  );
+
+  await Promise.all([
+    clearCache(`user_profile:${userId}`),
+    clearCache(`user_profiles:${userId}`)
+  ]);
+
+  // if (req.method === 'GET' && req.accepts('html')) {
+  //   return res.status(200).send(`
+  //     <!DOCTYPE html>
+  //     <html lang="es">
+  //     <head><title>Correo verificado - Edu Garcia Movimiento</title><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/></head>
+  //     <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; background: #f8fafc;">
+  //       <div style="background: white; padding: 40px; border-radius: 12px; text-align: center; max-width: 450px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin: 20px;">
+  //         <div style="font-size: 48px; margin-bottom: 16px;">✅</div>
+  //         <h2 style="color: #0f172a; margin-top: 0;">¡Correo verificado con éxito!</h2>
+  //         <p style="color: #475569; line-height: 1.6;">Tu dirección de correo electrónico ha sido confirmada en <strong>Edu Garcia Movimiento</strong>. Ya puedes continuar en la aplicación.</p>
+  //       </div>
+  //     </body>
+  //     </html>
+  //   `);
+  // }
+
+  return sendSuccess(res, { email_verified: true }, "Email verified successfully!");
 });

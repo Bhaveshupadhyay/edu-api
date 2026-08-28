@@ -7,13 +7,15 @@ import {
   asyncHandler,
   sendSuccess,
 } from '../utils/paginationHelper.js';
+import { generateDeviceFingerprint } from "../utils/authHelper.js";
+import { clearCache } from "../utils/cache.js";
 
 export const connected_devices = asyncHandler(async (req, res) => {
   const user_id = req.user?.id;
   const db = await dbConnectionPromise;
 
-  const [ connectedDevices ] = await db.query(
-    "SELECT device_id, device_type, seen_at FROM user_devices WHERE user_id = ?",
+  let [ connectedDevices ] = await db.query(
+    "SELECT device_fingerprint, device_type, seen_at FROM user_devices WHERE user_id = ? ORDER BY seen_at ASC",
     [user_id]
   );
 
@@ -26,7 +28,31 @@ export const connected_devices = asyncHandler(async (req, res) => {
   );
 
   const deviceLimit = subscriptionRows[0]?.deviceLimit || 1;
-  const totalConnected = connectedDevices.length;
+
+  // If total devices exceed deviceLimit, auto remove web devices according to seen_at (oldest first)
+  if (connectedDevices.length > deviceLimit) {
+    const webDevices = connectedDevices.filter(d => d.device_type === 'web');
+    if (webDevices.length > 0) {
+      for (const webDev of webDevices) {
+        await db.query(
+          "DELETE FROM user_devices WHERE user_id = ? AND device_fingerprint = ?",
+          [user_id, webDev.device_fingerprint]
+        );
+        await db.query(
+          "DELETE FROM user_profiles WHERE user_id = ? AND device_fingerprint = ?",
+          [user_id, webDev.device_fingerprint]
+        );
+      }
+      [ connectedDevices ] = await db.query(
+        "SELECT device_fingerprint, device_type, seen_at FROM user_devices WHERE user_id = ? ORDER BY seen_at ASC",
+        [user_id]
+      );
+    }
+  }
+
+  // Count non-web devices (web devices are not counted towards the device limit)
+  const countableDevices = connectedDevices.filter(d => d.device_type !== 'web');
+  const totalConnected = countableDevices.length;
 
   const reasonCode = totalConnected > deviceLimit ? 2 : 1;
   const message = reasonCode === 2
@@ -51,24 +77,44 @@ export const remove_device = asyncHandler(async (req, res) => {
   const user_id = req.user?.id;
   const { current_device_id, device_id } = req.body;
 
-  if (current_device_id === device_id) {
+  const currentFp = /^[a-f0-9]{64}$/i.test(current_device_id)
+    ? current_device_id
+    : generateDeviceFingerprint(current_device_id);
+
+  const targetFp = /^[a-f0-9]{64}$/i.test(device_id)
+    ? device_id
+    : generateDeviceFingerprint(device_id);
+
+  if (
+    current_device_id === device_id ||
+    (currentFp && targetFp && currentFp === targetFp) ||
+    currentFp === device_id ||
+    current_device_id === targetFp
+  ) {
     return res.status(200).json({
       isRemoved: false,
       message: "You can't remove the currently logged-in device."
     });
   }
 
-  const { rowCount } = await db.query(
-    "DELETE FROM user_devices WHERE user_id = ? AND device_id = ?",
-    [user_id, device_id]
+  const [result] = await db.query(
+    "DELETE FROM user_devices WHERE user_id = ? AND (device_fingerprint = ? OR device_fingerprint = ?)",
+    [user_id, targetFp, device_id]
   );
 
   await db.query(
-    "DELETE FROM user_profiles WHERE user_id = ? AND device_id = ?",
-    [user_id, device_id]
+    "DELETE FROM user_profiles WHERE user_id = ? AND (device_fingerprint = ? OR device_fingerprint = ?)",
+    [user_id, targetFp, device_id]
   );
 
-  if (rowCount === 0) {
+  await Promise.all([
+    clearCache(`user_session:${user_id}:${targetFp}`),
+    clearCache(`user_devices:${user_id}`),
+    clearCache(`user_profile:${user_id}`),
+    clearCache(`user_profiles:${user_id}`)
+  ]);
+
+  if (result.affectedRows === 0) {
     throw createError("No such user device found.", 404);
   }
 

@@ -84,199 +84,58 @@ export const userValidator = {
       .withMessage('Invalid UI style')
   ],
 
-  postComment: [
-    body("text")
-      .trim()
-      .notEmpty()
-      .withMessage("Comment is required")
-      .bail()
-      .isLength({ min: 1, max: 1000 })
-      .withMessage("Comment must be between 1 and 1000 characters")
-      .bail()
-      .matches(safeStringRegex)
-      .withMessage("Invalid characters in comment"),
-    body("lesson_id")
-      .trim()
-      .notEmpty()
-      .withMessage("Lesson is required")
-      .bail()
-      .isInt({ gt: 0 })
-      .withMessage("Lesson must be numeric")
-  ],
-
-  commentLikeDislike: [
-    body("value")
-      .trim()
-      .notEmpty()
-      .withMessage("Value is required")
-      .bail()
-      .isInt({ min: 0, max: 5 })
-      .withMessage("Invalid value found..."),
-    body("comment_id")
-      .trim()
-      .notEmpty()
-      .withMessage("Comment is required")
-      .bail()
-      .isInt({ gt: 0 })
-      .withMessage("Comment must be numeric")
-  ],
-
-  getLessonComments: [
-    param("lesson_id")
-      .trim()
-      .notEmpty()
-      .withMessage("Lesson is required")
-      .bail()
-      .isInt({ gt: 0 })
-      .withMessage("Lesson must be numeric"),
-    query("page_items").optional().isInt({ min: 1 }).withMessage("Items must be a positive number"),
-    query("pgNo").optional().isInt({ min: 1 }).withMessage("Page must be a positive number"),
-    query("page_items2").optional().isInt({ min: 1 }).withMessage("Item second must be a positive number"),
-    query("pgNo2").optional().isInt({ min: 1 }).withMessage("Page second must be a positive number")
-  ],
-
-  postReply: [
-    body("text")
-      .trim()
-      .notEmpty()
-      .withMessage("Reply is required")
-      .bail()
-      .isLength({ min: 1, max: 1000 })
-      .withMessage("Reply must be between 1 and 1000 characters")
-      .bail()
-      .matches(safeStringRegex)
-      .withMessage("Invalid characters in reply"),
-    body("comment_id")
-      .trim()
-      .notEmpty()
-      .withMessage("Comment is required")
-      .bail()
-      .isInt({ gt: 0 })
-      .withMessage("Comment must be numeric")
-  ],
-
-  replyLikeDislike: [
-    body("value")
-      .trim()
-      .notEmpty()
-      .withMessage("Value is required")
-      .bail()
-      .isInt({ min: 0, max: 5 })
-      .withMessage("Invalid value found..."),
-    body("comment_id")
-      .trim()
-      .notEmpty()
-      .withMessage("Comment is required")
-      .bail()
-      .isInt({ gt: 0 })
-      .withMessage("Comment must be numeric")
-  ],
-
-  addToWatchlist: [
-    body('device_id')
-      .trim()
-      .notEmpty()
-      .withMessage("Device ID is required.")
-      .bail()
-      .isLength({ min: 8, max: 255 })
-      .withMessage("We couldn't find the device you're looking for. Please log in again.")
-      .bail()
-      .matches(/^[A-Za-z0-9-:_]+$/)
-      .withMessage("Device ID format is invalid."),
-    
-    body('content_id')
-      .trim()
-      .notEmpty()
-      .withMessage("Please select a video to add to your watchlist.")
-      .bail()
-      .isInt({ gt: 0 })
-      .withMessage("This Video doesn't exist. Please check the ID and try again."),
-    
-    body('content_type')
-      .trim()
-      .notEmpty()
-      .withMessage("Oops! There was an issue with the video. Please try again.")
-      .bail()
-      .isInt({ gt: 0 })
-      .withMessage("Oops! There was an issue with the content type. Please try again.")
-      .bail()
-      .isIn(Object.keys(CategoryType))
-      .withMessage("Oops! There was an issue with the content type. Please try again.")
-  ],
-
   getFromWatchlist: [
     query("device")
       .trim()
       .notEmpty()
-      .withMessage("Device ID is required.")
+      .withMessage("Oops, something went wrong")
       .bail()
       .isLength({ min: 8, max: 255 })
-      .withMessage("We couldn't find the device you're looking for. Please log in again.")
+      .withMessage('Oops, something went wrong')
+      .bail()
+      .matches(/^[^<>]*$/)
+      .withMessage('Oops, something went wrong')
       .bail()
       .matches(/^[A-Za-z0-9-:_]+$/)
-      .withMessage("Device ID format is invalid."),
+      .withMessage('Oops, something went wrong'),
 
     query('pgNo').optional().isInt({min:1}).toInt(),
     query('page_items').optional().isInt({min:1}).toInt(),
   ],
 
   getContinueWatching: [
-    query('device_id')
-      .trim()
-      .notEmpty()
-      .withMessage("Device ID is required.")
-      .bail()
-      .isLength({ min: 8, max: 255 })
-      .withMessage("We couldn't find the device you're looking for. Please log in again.")
-      .bail()
-      .matches(/^[A-Za-z0-9-:_]+$/)
-      .withMessage("Device ID format is invalid."),
-    query('pgNo').optional().isInt({min:1}).toInt(),
-    query('page_items').optional().isInt({min:1}).toInt(),
+    query("limit").optional().isInt({ min: 1, max: 100 }).toInt(),
+    query("cursor").optional().isInt({ min: 0 }).toInt(),
+    query("pgNo").optional().isInt({ min: 1 }).toInt(),
+    query("page_items").optional().isInt({ min: 1 }).toInt(),
   ],
 
   updateContinueWatching: [
-    body('device_id')
-      .trim()
+    body("video_provider_id")
       .notEmpty()
-      .withMessage("Device ID is required.")
-      .bail()
-      .isLength({ min: 8, max: 255 })
-      .withMessage("We couldn't find the device you're looking for. Please log in again.")
-      .bail()
-      .matches(/^[A-Za-z0-9-:_]+$/)
-      .withMessage("Device ID format is invalid."),
-
-    body('content_id')
       .trim()
+      .withMessage()
+      .bail()
+      .isString()
+      .withMessage("video_provider_id must be a string"),
+    body("last_position_ms")
       .notEmpty()
-      .withMessage("Content ID is required.")
+      .withMessage("last_position_ms is required")
       .bail()
-      .isInt({ gt: 0 })
-      .withMessage("Invalid content ID provided."),
-
-    body('content_type')
-      .trim()
-      .notEmpty()
-      .withMessage("Content type is required.")
+      .isInt({ min: 0 })
+      .withMessage("last_position_ms must be a non-negative integer (milliseconds)")
       .bail()
-      .isInt({ gt: 0 })
-      .withMessage("Invalid content type provided.")
-      .bail()
-      .custom(value => {
-        const validTypes = Object.keys(CategoryType).map(Number);
-        if (!validTypes.includes(Number(value))) {
-          throw new Error("Invalid content type provided.");
+      .custom((value, { req }) => {
+        if (req.body.total_duration_ms !== undefined && Number(value) > Number(req.body.total_duration_ms)) {
+          throw new Error("invalid timing");
         }
         return true;
       }),
-
-    body('timing')
-      .trim()
+    body("total_duration_ms")
       .notEmpty()
-      .withMessage("Timing is required.")
+      .withMessage()
       .bail()
-      .isFloat({ min: 0 })
-      .withMessage("Timing must be a non-negative number.")
-  ],
-}
+      .isInt({ min: 0 })
+      .withMessage("total_duration_ms must be a non-negative integer (milliseconds)")
+  ]
+};

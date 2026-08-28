@@ -1835,7 +1835,7 @@ const fetchVimeoVideoData = async (videoId) => {
       method: 'GET',
       path: `/videos/${videoId}`,
       query: {
-        fields: 'files'
+        fields: 'files,pictures'
       }
     }, function (error, body) {
       if (error) {
@@ -1843,7 +1843,8 @@ const fetchVimeoVideoData = async (videoId) => {
         return resolve({
           isSuccess: true,
           data: {
-            video: ""
+            video: "",
+            thumbnail_url: ""
           }
         });
       }
@@ -1852,7 +1853,8 @@ const fetchVimeoVideoData = async (videoId) => {
         return resolve({
           isSuccess: true,
           data: {
-            video: ""
+            video: "",
+            thumbnail_url: ""
           }
         });
       }
@@ -1860,7 +1862,8 @@ const fetchVimeoVideoData = async (videoId) => {
       resolve({
         isSuccess: true,
         data: {
-          video: videoId
+          // video: videoId,
+          thumbnail: body?.pictures?.base_link
         }
       });
     });
@@ -1883,8 +1886,8 @@ export const getVideoByLessonID = asyncHandler(async (req, res) => {
   }
 
   const result = await fetchVimeoVideoData(videoRows.video_provider_id);
-  result.data.ui_style = videoRows.ui_style;
-  result.data.id = videoRows.id;
+  // result.data.ui_style = videoRows.ui_style;
+  // result.data.id = videoRows.id;
 
   return res.status(200).json(result);
 });
@@ -1901,9 +1904,11 @@ export const createVideo = asyncHandler(async (req, res) => {
     throw createError(`Lesson not found...`, 404);
   }
 
+  const videoResult = await fetchVimeoVideoData(video_provider_id);
+
   const [result] = await db.query(
-    "INSERT INTO videos (lesson_id, video_provider_id, ui_style) VALUES (?, ?, ?)",
-    [lesson_id, video_provider_id, ui_style]
+    "INSERT INTO videos (lesson_id, video_provider_id, thumbnail_url, ui_style) VALUES (?, ?, ?, ?)",
+    [lesson_id, videoResult?.data?.video, videoResult?.data?.thumbnail, ui_style]
   );
 
   // Invalidate caches
@@ -1933,9 +1938,11 @@ export const updateVideo = asyncHandler(async (req, res) => {
     throw createError(`Lesson not found...`, 404);
   }
 
+  const videoResult = await fetchVimeoVideoData(video_provider_id);
+
   const [result] = await db.query(
-    "UPDATE videos SET video_provider_id=?, ui_style=? WHERE id=?",
-    [video_provider_id, ui_style, id]
+    "UPDATE videos SET video_provider_id=?, thumbnail_url=?, ui_style=? WHERE id=?",
+    [videoResult?.data?.video, videoResult?.data?.thumbnail, ui_style, id]
   );
 
   // Invalidate caches
