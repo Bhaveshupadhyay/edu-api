@@ -1835,7 +1835,7 @@ const fetchVimeoVideoData = async (videoId) => {
       method: 'GET',
       path: `/videos/${videoId}`,
       query: {
-        fields: 'files,pictures'
+        fields: 'files'
       }
     }, function (error, body) {
       if (error) {
@@ -1844,7 +1844,7 @@ const fetchVimeoVideoData = async (videoId) => {
           isSuccess: true,
           data: {
             video: "",
-            thumbnail_url: ""
+            // thumbnail_url: ""
           }
         });
       }
@@ -1854,7 +1854,7 @@ const fetchVimeoVideoData = async (videoId) => {
           isSuccess: true,
           data: {
             video: "",
-            thumbnail_url: ""
+            // thumbnail_url: ""
           }
         });
       }
@@ -1862,8 +1862,8 @@ const fetchVimeoVideoData = async (videoId) => {
       resolve({
         isSuccess: true,
         data: {
-          // video: videoId,
-          thumbnail: body?.pictures?.base_link
+          video: videoId,
+          // thumbnail: body?.pictures?.base_link
         }
       });
     });
@@ -1886,8 +1886,8 @@ export const getVideoByLessonID = asyncHandler(async (req, res) => {
   }
 
   const result = await fetchVimeoVideoData(videoRows.video_provider_id);
-  // result.data.ui_style = videoRows.ui_style;
-  // result.data.id = videoRows.id;
+  result.data.ui_style = videoRows.ui_style;
+  result.data.id = videoRows.id;
 
   return res.status(200).json(result);
 });
