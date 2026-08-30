@@ -14,7 +14,7 @@ import { clearCache } from "../utils/cache.js";
 
 export const getUserDetails = asyncHandler(async (req, res) => {
   const user_id = req.user?.id;
-  const rawDeviceId = req.query.device_id || req.query.device_fingerprint;
+  const rawDeviceId = req.query.device_id;
   if (!user_id) throw createError("Unauthorized", 401);
 
   const deviceFingerprint = /^[a-f0-9]{64}$/i.test(rawDeviceId)
@@ -44,19 +44,18 @@ export const updateUserDetails = asyncHandler(async (req, res) => {
   const user_id = req.user?.id;
   if (!user_id) throw createError("Unauthorized", 401);
 
-  const { device_id, device_fingerprint, name, bio, avatar_url } = req.body;
-  const rawDeviceId = device_id || device_fingerprint;
+  const { device_id, name, bio, avatar_url } = req.body;
 
-  const deviceFingerprintVal = /^[a-f0-9]{64}$/i.test(rawDeviceId)
-    ? rawDeviceId
-    : generateDeviceFingerprint(rawDeviceId);
+  const deviceFingerprintVal = /^[a-f0-9]{64}$/i.test(device_id)
+    ? device_id
+    : generateDeviceFingerprint(device_id);
 
   const db = await dbConnectionPromise;
 
   // Verify device ownership
   const [[device]] = await db.query(
-    "SELECT 1 FROM user_devices WHERE user_id = ? AND (device_fingerprint = ? OR device_fingerprint = ?) LIMIT 1",
-    [user_id, deviceFingerprintVal, rawDeviceId]
+    "SELECT 1 FROM user_devices WHERE user_id = ? AND device_fingerprint = ? LIMIT 1",
+    [user_id, deviceFingerprintVal]
   );
   if (!device) throw createError("Device not found or not registered to this user.", 403);
 
