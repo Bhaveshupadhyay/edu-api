@@ -11,7 +11,7 @@ import authMiddleware from "../middleware/auth.middleware.js";
 
 const devicesRouter = Router();
 
-devicesRouter.get("/connected-device", authMiddleware, connected_devices);
+devicesRouter.post("/connected-device", authMiddleware, deviceValidator.get, connected_devices);
 
 devicesRouter.post("/remove-device", authMiddleware, deviceValidator.delete, remove_device);
 

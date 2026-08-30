@@ -7,7 +7,8 @@ import {
   OTP_TOKEN_SECRET,
   OTP_EXPIRES_IN,
   STRIPE_SECRET_KEY,
-  SHORT_TOKEN_SECRET
+  SHORT_TOKEN_SECRET,
+  BASE_URL1,
 } from "../config/env.js";
 import logger from "../libs/logger.js";
 import stripe from "stripe";
@@ -39,7 +40,7 @@ import { clearCache } from "../utils/cache.js";
 import { sendOtpEmail, sendWelcomeEmail, sendVerificationEmail } from "./mail.controllers.js";
 
 function generateSecureOTP() {
-  const otp = crypto.randomInt(10000, 100000); 
+  const otp = crypto.randomInt(100000, 1000000); 
   return otp.toString();
 }
 
@@ -262,7 +263,6 @@ const syncAuthBackend = async (req, res, emailInput, rawFingerprint, password, i
 
       return {
         user: userData,
-        userId,
         accessToken,
         reasonCode: authReasonCode || 1
       };
@@ -282,16 +282,16 @@ const syncAuthBackend = async (req, res, emailInput, rawFingerprint, password, i
     });
 
     // Send email verification link on new registration (10-minute expiry)
-    if (isRegistration && result.userId) {
-      const verificationToken = generateSpecificToken(
-        { id: result.userId, email, purpose: 'email_verification' },
-        SHORT_TOKEN_SECRET,
-        '10m'
-      );
-      sendVerificationEmail(email, verificationToken, type, result.user?.profile_name).catch((err) => {
-        logger.error("Verification email delivery failed on registration", { email, error: err.message });
-      });
-    }
+    // if (isRegistration && result.userId) {
+    //   const verificationToken = generateSpecificToken(
+    //     { id: result.userId, email, type },
+    //     SHORT_TOKEN_SECRET,
+    //     '1m'
+    //   );
+    //   sendVerificationEmail(email, verificationToken, type, result.user?.profile_name).catch((err) => {
+    //     logger.error("Verification email delivery failed on registration", { email, error: err.message });
+    //   });
+    // }
 
     return res.status(200).json({
       isSuccess: true,
@@ -303,7 +303,7 @@ const syncAuthBackend = async (req, res, emailInput, rawFingerprint, password, i
     logger.error("Auth Sync Failed", { email, error: error.message });
     return res.status(500).json({
       isSuccess: false,
-      message: "Internal server error during authentication sync."
+      message: "Opps! It seems to be a error. Please try again..."
     });
   }
 };
@@ -386,15 +386,15 @@ export const sendVerificationEmailController = asyncHandler(async (req, res) => 
   }
 
   const verificationToken = generateSpecificToken(
-    { id: user.id, email, purpose: 'email_verification' },
+    { id: user.id, email, type },
     SHORT_TOKEN_SECRET,
     '10m'
   );
 
   const result = await sendVerificationEmail(
     email,
-    type,
-    verificationToken
+    verificationToken,
+    type
   );
 
   if (!result.isSuccess) {
@@ -409,6 +409,8 @@ export const sendVerificationEmailController = asyncHandler(async (req, res) => 
  */
 export const verifyEmailController = asyncHandler(async (req, res) => {
   const userId = req.user?.id;
+
+  const type = req.user?.type;
 
   if (!userId) {
     throw createError("Unauthorized / User ID missing from token", 401);
@@ -425,6 +427,10 @@ export const verifyEmailController = asyncHandler(async (req, res) => {
     throw createError("User account not found.", 404);
   }
 
+  if (user.email_verified) {
+    return sendSuccess(res, { email_verified: true }, "Email is already verified.");
+  }
+
   await db.query(
     "UPDATE users SET email_verified = 1 WHERE id = ?",
     [userId]
@@ -435,21 +441,15 @@ export const verifyEmailController = asyncHandler(async (req, res) => {
     clearCache(`user_profiles:${userId}`)
   ]);
 
-  // if (req.method === 'GET' && req.accepts('html')) {
-  //   return res.status(200).send(`
-  //     <!DOCTYPE html>
-  //     <html lang="es">
-  //     <head><title>Correo verificado - Edu Garcia Movimiento</title><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/></head>
-  //     <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; background: #f8fafc;">
-  //       <div style="background: white; padding: 40px; border-radius: 12px; text-align: center; max-width: 450px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin: 20px;">
-  //         <div style="font-size: 48px; margin-bottom: 16px;">✅</div>
-  //         <h2 style="color: #0f172a; margin-top: 0;">¡Correo verificado con éxito!</h2>
-  //         <p style="color: #475569; line-height: 1.6;">Tu dirección de correo electrónico ha sido confirmada en <strong>Edu Garcia Movimiento</strong>. Ya puedes continuar en la aplicación.</p>
-  //       </div>
-  //     </body>
-  //     </html>
-  //   `);
-  // }
+  if (type.toLowerCase() === "web") {
+    return res.redirect(
+      `${BASE_URL1}/email-verified?status=success`
+    );
+  }
 
-  return sendSuccess(res, { email_verified: true }, "Email verified successfully!");
+  return res.redirect(
+    `myapp://email-verified`
+  );
+
+  // return sendSuccess(res, { email_verified: true }, "Email verified successfully!");
 });

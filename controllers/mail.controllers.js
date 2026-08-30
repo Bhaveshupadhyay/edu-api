@@ -2,7 +2,7 @@ import { Resend } from 'resend';
 import { 
   MAILENV, 
   RESEND_FROM_EMAIL, 
-  BASE_URL1, 
+  BASE_URL, 
   SHORT_TOKEN_SECRET 
 } from "../config/env.js";
 import logger from "../libs/logger.js";
@@ -225,9 +225,7 @@ export const sendVerificationEmail = async (email, token, device, name = 'Miembr
   const displayName = name || 'Miembro';
   const subject = `Verifica tu correo electrónico - Edu Garcia Movimiento`;
   
-  const verifyLink = device.toLowerCase() === 'web' ? 
-    `${BASE_URL1}/verify-email?q=${encodeURIComponent(token)}`
-    : `${BASE_URL1}/verify-email?q=${encodeURIComponent(token)}`;
+  const verifyLink = `${BASE_URL}/api/v1/auth/verify-email?q=${encodeURIComponent(token)}`;
 
   const html = `
     <!DOCTYPE html>

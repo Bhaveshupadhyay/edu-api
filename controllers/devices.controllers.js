@@ -6,13 +6,24 @@ import {
 import {
   asyncHandler,
   sendSuccess,
+  withTransaction
 } from '../utils/paginationHelper.js';
-import { generateDeviceFingerprint } from "../utils/authHelper.js";
+import { generateDeviceFingerprint, isDateToday } from "../utils/authHelper.js";
 import { clearCache } from "../utils/cache.js";
 
 export const connected_devices = asyncHandler(async (req, res) => {
+  handleValidationErrors(req);
+
   const user_id = req.user?.id;
+  if (!user_id) {
+    throw createError("Unauthorized / User ID missing", 401);
+  }
+
+  const { device_id } = req.body;
+
   const db = await dbConnectionPromise;
+
+  const currentFp = /^[a-f0-9]{64}$/i.test(device_id) ? device_id : generateDeviceFingerprint(device_id, req);
 
   let [ connectedDevices ] = await db.query(
     "SELECT device_fingerprint, device_type, seen_at FROM user_devices WHERE user_id = ? ORDER BY seen_at ASC",
@@ -29,20 +40,35 @@ export const connected_devices = asyncHandler(async (req, res) => {
 
   const deviceLimit = subscriptionRows[0]?.deviceLimit || 1;
 
-  // If total devices exceed deviceLimit, auto remove web devices according to seen_at (oldest first)
+  // If total devices exceed deviceLimit, auto remove web devices according to seen_at (oldest first, not today)
   if (connectedDevices.length > deviceLimit) {
     const webDevices = connectedDevices.filter(d => d.device_type === 'web');
-    if (webDevices.length > 0) {
-      for (const webDev of webDevices) {
-        await db.query(
-          "DELETE FROM user_devices WHERE user_id = ? AND device_fingerprint = ?",
-          [user_id, webDev.device_fingerprint]
-        );
-        await db.query(
-          "DELETE FROM user_profiles WHERE user_id = ? AND device_fingerprint = ?",
-          [user_id, webDev.device_fingerprint]
-        );
+    const staleWebDevices = webDevices.filter(d => !isDateToday(d.seen_at));
+
+    if (staleWebDevices.length > 0) {
+      await withTransaction(db, async (connection) => {
+        for (const webDev of staleWebDevices) {
+          await connection.execute(
+            "DELETE FROM user_devices WHERE user_id = ? AND device_fingerprint = ?",
+            [user_id, webDev.device_fingerprint]
+          );
+          await connection.execute(
+            "DELETE FROM user_profiles WHERE user_id = ? AND device_fingerprint = ?",
+            [user_id, webDev.device_fingerprint]
+          );
+        }
+      });
+
+      const clearCachePromises = [
+        clearCache(`user_devices:${user_id}`),
+        clearCache(`user_profile:${user_id}`),
+        clearCache(`user_profiles:${user_id}`)
+      ];
+      for (const webDev of staleWebDevices) {
+        clearCachePromises.push(clearCache(`user_session:${user_id}:${webDev.device_fingerprint}`));
       }
+      await Promise.all(clearCachePromises);
+
       [ connectedDevices ] = await db.query(
         "SELECT device_fingerprint, device_type, seen_at FROM user_devices WHERE user_id = ? ORDER BY seen_at ASC",
         [user_id]
@@ -50,20 +76,29 @@ export const connected_devices = asyncHandler(async (req, res) => {
     }
   }
 
-  // Count non-web devices (web devices are not counted towards the device limit)
-  const countableDevices = connectedDevices.filter(d => d.device_type !== 'web');
-  const totalConnected = countableDevices.length;
+  const totalConnected = connectedDevices.length;
 
   const reasonCode = totalConnected > deviceLimit ? 2 : 1;
   const message = reasonCode === 2
     ? `Please remove ${totalConnected - deviceLimit} ${totalConnected - deviceLimit === 1 ? 'device' : 'devices'} to continue.`
     : "";
 
+  const formattedDevices = connectedDevices.map((d) => {
+    const isConnected = device_id && Boolean(
+      currentFp === d.device_fingerprint
+    );
+
+    return {
+      ...d,
+      is_connected: isConnected
+    };
+  });
+
   return res.status(200).json({
     isSuccess: true,
     data: {
       message,
-      result: connectedDevices,
+      result: formattedDevices,
       reasonCode,
       deviceLimit
     }

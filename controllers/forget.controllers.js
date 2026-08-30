@@ -186,7 +186,6 @@ export const resetPassword = asyncHandler(async (req, res) => {
 
       return {
         user: userData,
-        userId,
         accessToken,
         reasonCode: authReasonCode || 1
       };

@@ -174,10 +174,11 @@ export const get_subscription_plan = asyncHandler(async (req, res) => {
 export const get_checkout_options = asyncHandler(async (req, res) => {
   handleValidationErrors(req);
   
-  const { plan, device_id, device } = req.body; 
+  const { plan, device } = req.body; 
+  const deviceId = generateDeviceFingerprint(req.body.device_id);
   
   // Create a strict data pattern string
-  const rawData = `${req.user.id}:${plan}:${device_id}:${device}`;
+  const rawData = `${req.user.id}:${plan}:${deviceId}:${device}`;
   const checksum = generateChecksum(rawData);
 
   return sendSuccess(res, {
@@ -188,15 +189,16 @@ export const get_checkout_options = asyncHandler(async (req, res) => {
 export const post_subscription = asyncHandler(async (req, res) => {
   handleValidationErrors(req);
 
-  const { plan, device_id, device, checksum } = req.body; 
+  const { plan, device, checksum } = req.body; 
   const user_id = req.user.id;
+  const deviceId = generateDeviceFingerprint(req.body.device_id);
 
   if (!checksum) {
     throw createError("We couldn't verify your checkout request. Please refresh the page and try again.", 400);
   }
 
   // 1. Re-create the checksum using the exact same pattern
-  const rawData = `${user_id}:${plan}:${device_id}:${device}`;
+  const rawData = `${user_id}:${plan}:${deviceId}:${device}`;
   const expectedChecksum = crypto
     .createHmac('sha256', CHECKSUM_SECRET)
     .update(rawData)
@@ -230,10 +232,10 @@ export const post_subscription = asyncHandler(async (req, res) => {
   }
 
   // Verify device ownership
-  const deviceFp = device_id ? (/^[a-f0-9]{64}$/i.test(device_id) ? device_id : generateDeviceFingerprint(device_id)) : null;
+  // const deviceFp = device_id ? (/^[a-f0-9]{64}$/i.test(device_id) ? device_id : generateDeviceFingerprint(device_id)) : null;
   const [[deviceFound]] = await db.query(
     "SELECT 1 FROM user_devices WHERE user_id = ? AND (device_fingerprint = ? OR device_fingerprint = ?) LIMIT 1",
-    [user_id, deviceFp, device_id]
+    [user_id, deviceId, req.body.device_id]
   );
   if (!deviceFound) {
     throw createError("Your device could not be verified. Please log in again to continue.", 403);
@@ -256,7 +258,8 @@ export const post_subscription = asyncHandler(async (req, res) => {
 
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
-    payment_method_types: ["card", "sepa_debit"], 
+    // payment_method_types: ["card", "sepa_debit"], 
+    payment_method_types: ["card"], 
     customer: customerId,
     line_items: [{
       price: planData.stripe_price_id,
@@ -265,13 +268,13 @@ export const post_subscription = asyncHandler(async (req, res) => {
     metadata: {
       user_id: user_id.toString(),
       plan_id: planData.id.toString(),
-      device_id: device_id
+      device_id: req.body.device_id
     },
     subscription_data: {
       metadata: {
         user_id: user_id.toString(),
         plan_id: planData.id.toString(),
-        device_id: device_id
+        device_id: req.body.device_id
       }
     },
     success_url,
