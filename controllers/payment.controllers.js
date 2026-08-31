@@ -92,7 +92,7 @@ async function getCustomerByUserId(user_id) {
 export const get_token_verified = asyncHandler(async (req, res) => {
   handleValidationErrors(req);
 
-  const { token, device_id } = req.body;
+  const { token } = req.body;
   if (!token) throw createError("Verification token is required. Please log in again.", 400);
 
   let verifiedUser;
@@ -104,7 +104,8 @@ export const get_token_verified = asyncHandler(async (req, res) => {
 
   if (!verifiedUser?.id) throw createError("Your session link has expired. Please log in again.", 401);
 
-  const userId = verifiedUser.id;
+  const userId = verifiedUser?.id;
+  const device_id = verifiedUser?.device_id;
   const db = await dbConnectionPromise;
   const [[user]] = await db.query("SELECT id, email, email_verified FROM users WHERE id = ?", [userId]);
   if (!user) throw createError("Account not found. Please sign up or log in.", 404);
@@ -114,7 +115,7 @@ export const get_token_verified = asyncHandler(async (req, res) => {
 
   const deviceFingerprint = generateDeviceFingerprint(device_id, req);
 
-  const [subscriptions] = await connection.execute(
+  const [subscriptions] = await db.execute(
     `SELECT up.name as profile_name, up.bio as profile_bio, s.status, s.current_period_end, s.stripe_sub_id, 
       p.plan_name, p.monthly_price, p.max_screens, p.duration_value, p.duration_unit
       FROM user_subscriptions s

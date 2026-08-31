@@ -30,13 +30,13 @@ export const generateWebsiteToken = asyncHandler(async (req, res) => {
   }
 
   const webToken = generateSpecificToken(
-    { id: user_id },
+    { id: user_id, device_id },
     WEB_TOKEN_SECRET,
     WEB_EXPIRES_IN
   );
 
   return res.status(200).json({
     isSuccess: true,
-    link: `https://www.edumovimiento.com/?src=iosApp&nftoken=${webToken}&device_id=${device_id}`
+    link: `https://www.edumovimiento.com/?src=iosApp&nftoken=${webToken}`
   });
 });

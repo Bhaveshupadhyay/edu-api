@@ -107,7 +107,7 @@ export const subscriptionValidators = {
     query('limit').optional().isInt({ min: 1, max: 100 }).toInt(),
     query('cursor').optional().isInt({ min: 1 }).toInt()
   ],
-  
+
   websiteLink: [
     param('device_id')
       .trim()
@@ -122,5 +122,5 @@ export const subscriptionValidators = {
       .bail()
       .matches(/^[A-Za-z0-9-:_]+$/)
       .withMessage('Oops, something went wrong'),
-  ],
+  ]
 }; 
