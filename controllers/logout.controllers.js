@@ -53,8 +53,8 @@ export const signOut = asyncHandler(async (req, res) => {
   if (device_id) {
     const deviceFp = /^[a-f0-9]{64}$/i.test(device_id) ? device_id : generateDeviceFingerprint(device_id);
     await db.query(
-      "UPDATE user_devices SET rem_token = NULL WHERE (device_fingerprint = ? OR device_fingerprint = ?) AND user_id = ?",
-      [deviceFp, device_id, user_id]
+      "UPDATE user_devices SET rem_token = NULL WHERE device_fingerprint = ? AND user_id = ?",
+      [deviceFp, user_id]
     );
     await clearCache(`user_session:${user_id}:${deviceFp}`);
   } else {
