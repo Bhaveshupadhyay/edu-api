@@ -21,12 +21,10 @@ export const getDeviceTypeFromUserAgent = (userAgentHeader) => {
 
   const ua = userAgentHeader.toLowerCase().trim();
 
-  // Direct enum match
   if (['android', 'ios', 'tv', 'web'].includes(ua)) {
     return ua;
   }
 
-  // TV check
   if (
     ua.includes('smarttv') ||
     ua.includes('smart-tv') ||
@@ -48,7 +46,6 @@ export const getDeviceTypeFromUserAgent = (userAgentHeader) => {
     return 'tv';
   }
 
-  // iOS check
   if (
     ua.includes('iphone') ||
     ua.includes('ipad') ||
@@ -58,13 +55,13 @@ export const getDeviceTypeFromUserAgent = (userAgentHeader) => {
     return 'ios';
   }
 
-  // Android check
   if (ua.includes('android')) {
     return 'android';
   }
 
   return 'web';
 };
+
 
 /**
  * Generate SHA-256 device fingerprint from raw ID/string or request headers

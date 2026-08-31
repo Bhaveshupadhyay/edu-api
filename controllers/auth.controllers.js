@@ -49,7 +49,13 @@ function generateSecureOTP() {
  */
 const syncAuthBackend = async (req, res, emailInput, rawFingerprint, password, isRegistration = false) => {
   const email = (emailInput || "").toLowerCase();
-  const type = getDeviceTypeFromUserAgent(req.headers['user-agent']);
+  // const type = getDeviceTypeFromUserAgent(req.headers['user-agent']);
+  const deviceType = req.headers['x-device-type'];
+
+  const type = ['android', 'ios', 'web'].includes(deviceType)
+    ? deviceType
+    : getDeviceTypeFromUserAgent(req.headers['user-agent']);
+    
   const deviceFingerprint = generateDeviceFingerprint(rawFingerprint, req);
 
   try {
@@ -448,7 +454,7 @@ export const verifyEmailController = asyncHandler(async (req, res) => {
   }
 
   return res.redirect(
-    `myapp://email-verified`
+    "edugarciamovimiento://email_verified"
   );
 
   // return sendSuccess(res, { email_verified: true }, "Email verified successfully!");

@@ -254,8 +254,8 @@ export const post_subscription = asyncHandler(async (req, res) => {
     throw createError("You already have an active subscription on your account.", 400);
   }
 
-  const success_url = device === 'app' ? `${BASE_URL1}/payment-success` : `${BASE_URL1}/payment-success?session_id={CHECKOUT_SESSION_ID}`;
-  const cancel_url = device === 'app' ? `${BASE_URL1}/payment-cancelled` : `${BASE_URL1}/payment-cancelled`;
+  const success_url = device === 'app' ? `edugarciamovimiento://payment-success` : `${BASE_URL1}/payment-success?session_id={CHECKOUT_SESSION_ID}`;
+  const cancel_url = device === 'app' ? `edugarciamovimiento://payment-canceled` : `${BASE_URL1}/payment-cancelled`;
 
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
