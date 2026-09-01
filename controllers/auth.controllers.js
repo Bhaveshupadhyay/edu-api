@@ -49,7 +49,7 @@ function generateSecureOTP() {
  */
 const syncAuthBackend = async (req, res, emailInput, rawFingerprint, password, isRegistration = false) => {
   const email = (emailInput || "").toLowerCase();
-  // const type = getDeviceTypeFromUserAgent(req.headers['user-agent']);
+
   const deviceType = req.headers['x-device-type'];
 
   const type = ['android', 'ios', 'web'].includes(deviceType)
@@ -370,7 +370,11 @@ export const signInAdmin = asyncHandler(async (req, res) => {
 export const sendVerificationEmailController = asyncHandler(async (req, res) => {
   handleValidationErrors(req);
 
-  const type = getDeviceTypeFromUserAgent(req.headers['user-agent']);
+  const deviceType = req.headers['x-device-type'];
+
+  const type = ['android', 'ios', 'web'].includes(deviceType)
+    ? deviceType
+    : getDeviceTypeFromUserAgent(req.headers['user-agent']);
 
   const { email } = req.body;
   if (!email) {
