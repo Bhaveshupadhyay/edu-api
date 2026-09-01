@@ -160,7 +160,9 @@ export const get_token_verified = asyncHandler(async (req, res) => {
   return sendSuccess(res, {
     user: userData,
     accessToken,
-    reasonCode: 1
+    reasonCode: 1,
+    device_id,
+    device
   });
 });
 
