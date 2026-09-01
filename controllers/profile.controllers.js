@@ -25,14 +25,14 @@ export const getUserDetails = asyncHandler(async (req, res) => {
 
   // Verify device ownership
   const [[device]] = await db.query(
-    "SELECT 1 FROM user_devices WHERE user_id = ? AND (device_fingerprint = ? OR device_fingerprint = ?) LIMIT 1",
-    [user_id, deviceFingerprint, rawDeviceId]
+    "SELECT 1 FROM user_devices WHERE user_id = ? AND device_fingerprint = ? LIMIT 1",
+    [user_id, deviceFingerprint]
   );
   if (!device) throw createError("Device not found or not registered to this user.", 403);
 
   const [rows] = await db.query(
-    "SELECT name, bio, avatar_url FROM user_profiles WHERE user_id = ? AND (device_fingerprint = ? OR device_fingerprint = ?) LIMIT 1",
-    [user_id, deviceFingerprint, rawDeviceId]
+    "SELECT name, bio, avatar_url FROM user_profiles WHERE user_id = ? AND device_fingerprint = ? LIMIT 1",
+    [user_id, deviceFingerprint]
   );
 
   return sendSuccess(res, rows[0] || {});
