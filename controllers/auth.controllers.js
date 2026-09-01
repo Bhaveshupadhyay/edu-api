@@ -458,7 +458,7 @@ export const verifyEmailController = asyncHandler(async (req, res) => {
   }
 
   return res.redirect(
-    "edugarciamovimiento://email_verified"
+    "edugarciamovimiento://callback?screen=email_verified"
   );
 
   // return sendSuccess(res, { email_verified: true }, "Email verified successfully!");
