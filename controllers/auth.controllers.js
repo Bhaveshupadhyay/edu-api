@@ -453,15 +453,7 @@ export const verifyEmailController = asyncHandler(async (req, res) => {
     clearCache(`user_profiles:${userId}`)
   ]);
 
-  if (type.toLowerCase() === "web") {
     return res.redirect(
       `${BASE_URL1}/email-verified?status=success`
     );
-  }
-
-  return res.redirect(
-    "edugarciamovimiento://email_verified"
-  );
-
-  // return sendSuccess(res, { email_verified: true }, "Email verified successfully!");
 });
