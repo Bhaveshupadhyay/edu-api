@@ -438,7 +438,9 @@ export const verifyEmailController = asyncHandler(async (req, res) => {
   }
 
   if (user.email_verified) {
-    return sendSuccess(res, { email_verified: true }, "Email is already verified.");
+    return res.redirect(
+      `${BASE_URL1}/email-verified?status=success`
+    );
   }
 
   await db.query(
@@ -458,7 +460,7 @@ export const verifyEmailController = asyncHandler(async (req, res) => {
   }
 
   return res.redirect(
-    "edugarciamovimiento://callback?screen=email_verified"
+    "edugarciamovimiento://email_verified"
   );
 
   // return sendSuccess(res, { email_verified: true }, "Email verified successfully!");
