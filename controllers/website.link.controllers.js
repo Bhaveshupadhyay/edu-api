@@ -30,7 +30,7 @@ export const generateWebsiteToken = asyncHandler(async (req, res) => {
   }
 
   const webToken = generateSpecificToken(
-    { id: user_id, device_id },
+    { id: user_id, device_id, device: "app" },
     WEB_TOKEN_SECRET,
     WEB_EXPIRES_IN
   );

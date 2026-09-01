@@ -106,6 +106,7 @@ export const get_token_verified = asyncHandler(async (req, res) => {
 
   const userId = verifiedUser?.id;
   const device_id = verifiedUser?.device_id;
+  const device = verifiedUser?.device;
   const db = await dbConnectionPromise;
   const [[user]] = await db.query("SELECT id, email, email_verified FROM users WHERE id = ?", [userId]);
   if (!user) throw createError("Account not found. Please sign up or log in.", 404);
