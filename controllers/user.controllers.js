@@ -324,6 +324,48 @@ export const get_section_content = asyncHandler(async (req, res) => {
   return sendSuccess(res, { initial_data: result });
 });
 
+export const getModuleDetails = asyncHandler(async (req, res) => {
+  handleValidationErrors(req);
+  const { module_id } = req.params;
+  const db = await dbConnectionPromise;
+  const cacheKey = `cache:/api/v1/users/modules-lessons/${module_id}:details`;
+
+  const result = await getOrSetCache(cacheKey, async () => {
+    const [[moduleDetails]] = await db.query(
+      `SELECT 
+        m.id, 
+        m.title, 
+        m.description, 
+        m.thumbnail_url, 
+        m.is_free,
+        (
+          SELECT COUNT(v.id) 
+          FROM videos v 
+          JOIN lessons l ON v.lesson_id = l.id 
+          JOIN syllabus s ON l.syllabus_id = s.id 
+          WHERE s.module_id = m.id
+        ) AS videos_count
+      FROM modules m 
+      WHERE m.id = ? AND m.is_active = 1 
+      LIMIT 1`,
+      [module_id]
+    );
+
+    if (!moduleDetails) return null;
+
+    return {
+      ...moduleDetails,
+      videos_count: Number(moduleDetails.videos_count || 0)
+    };
+  });
+
+  if (!result) {
+    throw createError("Module not found", 404);
+  }
+
+  return sendSuccess(res, result);
+});
+
 export const getModulesLessonsData = asyncHandler(async (req, res) => {
   handleValidationErrors(req);
   const { module_id } = req.params;

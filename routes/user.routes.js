@@ -4,6 +4,7 @@ import {
   get_search_data,
   get_home_data,
   get_nav_pill_collections,
+  getModuleDetails,
   get_section_content,
   getModulesLessonsData,
   get_lesson_data,
@@ -56,6 +57,13 @@ userRouter.get(
   "/section/:section_id", 
   userValidator.getSectionById, 
   get_section_content
+);
+
+// Get module details by module_id
+userRouter.get(
+  "/modules/:module_id",
+  userValidator.getModuleDetails, 
+  getModuleDetails
 );
 
 // Get module with lessons (paginated)

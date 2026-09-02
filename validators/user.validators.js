@@ -54,6 +54,16 @@ export const userValidator = {
     query("cursor").optional().isInt({ min: 0 }).toInt()
   ],
 
+  getModuleDetails: [
+    param("module_id")
+      .trim()
+      .notEmpty()
+      .withMessage("Module ID is required")
+      .bail()
+      .isInt({ gt: 0 })
+      .withMessage("Module ID must be a positive number")
+  ],
+
   getModulesLessons: [
     param("module_id")
       .trim()
