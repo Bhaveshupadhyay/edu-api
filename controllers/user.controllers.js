@@ -360,7 +360,7 @@ export const getModulesLessonsData = asyncHandler(async (req, res) => {
         SELECT 
           s.id as syllabus_id, s.title as syllabus_title, s.workout_instructions as syllabus_workout_instructions, s.position as s_position,
           l.id as lesson_id, l.title as lesson_title, l.workout_instructions as lesson_workout_instructions, l.position as l_position, 
-          v.video_provider_id, v.ui_style, cw.video_id, cw.is_completed,
+          v.video_provider_id, v.ui_style, cw.last_position_ms, cw.video_id, cw.is_completed,
           ROW_NUMBER() OVER (PARTITION BY s.id ORDER BY l.position ASC) as lesson_rank
         FROM syllabus s
         LEFT JOIN lessons l ON s.id = l.syllabus_id
