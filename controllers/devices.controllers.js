@@ -40,6 +40,8 @@ export const connected_devices = asyncHandler(async (req, res) => {
 
   const deviceLimit = subscriptionRows[0]?.deviceLimit || 1;
 
+  // console.log(connectedDevices);
+
   // If total devices exceed deviceLimit, auto remove web devices according to seen_at (oldest first, not today)
   if (connectedDevices.length > deviceLimit) {
     const webDevices = connectedDevices.filter(d => d.device_type === 'web');

@@ -185,6 +185,8 @@ export const get_checkout_options = asyncHandler(async (req, res) => {
   const rawData = `${req.user.id}:${plan}:${deviceId}:${device}`;
   const checksum = generateChecksum(rawData);
 
+  // console.log(req.body, deviceId, req.user.id, checksum);
+
   return sendSuccess(res, {
     checksum // Send this to UI
   });
@@ -196,6 +198,8 @@ export const post_subscription = asyncHandler(async (req, res) => {
   const { plan, device, checksum } = req.body; 
   const user_id = req.user.id;
   const deviceId = generateDeviceFingerprint(req.body.device_id);
+
+  // console.log(req.body, user_id, deviceId);
 
   if (!checksum) {
     throw createError("We couldn't verify your checkout request. Please refresh the page and try again.", 400);
@@ -238,8 +242,8 @@ export const post_subscription = asyncHandler(async (req, res) => {
   // Verify device ownership
   // const deviceFp = device_id ? (/^[a-f0-9]{64}$/i.test(device_id) ? device_id : generateDeviceFingerprint(device_id)) : null;
   const [[deviceFound]] = await db.query(
-    "SELECT 1 FROM user_devices WHERE user_id = ? AND (device_fingerprint = ? OR device_fingerprint = ?) LIMIT 1",
-    [user_id, deviceId, req.body.device_id]
+    "SELECT 1 FROM user_devices WHERE user_id = ? AND device_fingerprint = ? LIMIT 1",
+    [user_id, deviceId]
   );
   if (!deviceFound) {
     throw createError("Your device could not be verified. Please log in again to continue.", 403);
