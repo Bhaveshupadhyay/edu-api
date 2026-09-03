@@ -2,7 +2,7 @@ import dbConnectionPromise from "../config/db.js";
 import logger from "../libs/logger.js";
 import {   
   isReviewer
-} from "../config/env.js";
+} from "../utils/authHelper.js";
 
 /**
  * Middleware to check whether the authenticated user's email is verified
