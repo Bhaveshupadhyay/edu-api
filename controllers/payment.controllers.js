@@ -261,11 +261,16 @@ export const post_subscription = asyncHandler(async (req, res) => {
     throw createError("You already have an active subscription on your account.", 400);
   }
 
-  // const success_url = device === 'app' ? `edugarciamovimiento://callback?screen=payment-success` : `${BASE_URL1}/payment-success?session_id={CHECKOUT_SESSION_ID}`;
-  // const cancel_url = device === 'app' ? `edugarciamovimiento://callback?screen=payment-canceled` : `${BASE_URL1}/payment-cancelled`;
+    const success_url = device === 'app'
+      ? `edugarciamovimiento://callback?screen=payment-success&session_id={CHECKOUT_SESSION_ID}`
+      : `${BASE_URL1}/payment-success?session_id={CHECKOUT_SESSION_ID}`;
 
-  const success_url = `${BASE_URL1}/payment-success?session_id={CHECKOUT_SESSION_ID}`;
-  const cancel_url = `${BASE_URL1}/payment-cancelled`;
+    const cancel_url = device === 'app'
+      ? `edugarciamovimiento://callback?screen=payment-canceled`
+      : `${BASE_URL1}/payment-cancelled`;
+
+  // const success_url = `${BASE_URL1}/payment-success?session_id={CHECKOUT_SESSION_ID}`;
+  // const cancel_url = `${BASE_URL1}/payment-cancelled`;
 
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
@@ -303,7 +308,8 @@ export const get_subscription_status = asyncHandler(async (req, res) => {
 
   // 1. Try to find it in our Database first
   let [[subscription]] = await db.query(
-    `SELECT us.*, p.monthly_price, p.plan_name, p.duration_value, p.duration_unit FROM user_subscriptions us
+    `SELECT us.*, p.monthly_price, p.plan_name, p.duration_value, p.duration_unit 
+     FROM user_subscriptions us
      JOIN plans p ON us.plan_id = p.id
      WHERE us.user_id = ? ORDER BY us.id DESC LIMIT 1`,
     [user_id]
