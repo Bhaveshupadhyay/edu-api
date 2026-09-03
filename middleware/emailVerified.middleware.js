@@ -30,16 +30,16 @@ const requireVerifiedEmail = async (req, res, next) => {
       return next(error);
     }
 
-    const isUserReviewer = isReviewer(email);
+    const isUserReviewer = isReviewer(user?.email);
 
-    if (!user.email_verified && !isUserReviewer) {
+    if (!user?.email_verified && !isUserReviewer) {
       const error = new Error("Email verification required. Please verify your email address to access this feature.");
       error.statusCode = 403;
       return next(error);
     }
 
     req.user.email_verified = 1;
-    req.user.email = user.email;
+    req.user.email = user?.email;
     next();
   } catch (error) {
     logger.error("Error in requireVerifiedEmail middleware", { error: error.message });
