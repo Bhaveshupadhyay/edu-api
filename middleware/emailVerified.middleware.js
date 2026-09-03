@@ -1,5 +1,8 @@
 import dbConnectionPromise from "../config/db.js";
 import logger from "../libs/logger.js";
+import {   
+  isReviewer
+} from "../config/env.js";
 
 /**
  * Middleware to check whether the authenticated user's email is verified
@@ -27,7 +30,9 @@ const requireVerifiedEmail = async (req, res, next) => {
       return next(error);
     }
 
-    if (!user.email_verified) {
+    const isUserReviewer = isReviewer(email);
+
+    if (!user.email_verified && !isUserReviewer) {
       const error = new Error("Email verification required. Please verify your email address to access this feature.");
       error.statusCode = 403;
       return next(error);
