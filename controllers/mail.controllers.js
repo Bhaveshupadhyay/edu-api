@@ -280,11 +280,114 @@ export const sendVerificationEmail = async (email, token, device, name = 'Miembr
   });
 };
 
+/**
+ * Send access steps email with direct "Access now" button opening in a new tab
+ * @param {string|Object} emailOrOptions - Recipient email address or options object
+ * @param {string} [link] - One-time / web access URL
+ * @param {string} [name='Miembro'] - User's name
+ * @returns {Promise<Object>}
+ */
+export const sendAccessStepsEmail = async (emailOrOptions, link, name = 'Miembro') => {
+  let email, accessLink, displayName;
+
+  email = emailOrOptions;
+  accessLink = link;
+  displayName = name || 'Miembro';
+
+  const subject = `Pasos para acceder a tu cuenta - Edu Garcia Movimiento`;
+
+  const html = `
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Pasos para acceder a tu cuenta</title>
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #1e293b; margin: 0; padding: 20px; }
+        .container { max-width: 540px; margin: 0 auto; background: #ffffff; border-radius: 12px; padding: 32px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }
+        .header { text-align: center; margin-bottom: 24px; }
+        .app-name { font-size: 24px; font-weight: 800; color: #0f172a; margin: 0; }
+        .greeting { font-size: 18px; font-weight: 600; color: #334155; margin-top: 16px; }
+        .text { font-size: 14px; line-height: 1.6; color: #475569; margin: 14px 0; }
+        .steps-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin: 24px 0; }
+        .btn-container { text-align: center; margin: 32px 0; }
+        .btn { background-color: #2563eb; color: #ffffff !important; padding: 14px 32px; font-size: 16px; font-weight: 700; text-decoration: none; border-radius: 8px; display: inline-block; box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.25); }
+        .note { font-size: 13px; color: #64748b; margin-top: 20px; line-height: 1.5; }
+        .link-text { word-break: break-all; color: #2563eb; font-size: 12px; }
+        .footer { text-align: center; font-size: 12px; color: #94a3b8; margin-top: 32px; border-top: 1px solid #e2e8f0; padding-top: 16px; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1 class="app-name">Edu Garcia Movimiento</h1>
+          <h2 class="greeting">¡Hola, ${displayName}! 👋</h2>
+        </div>
+        <p class="text">Has solicitado los pasos para acceder a tu plataforma y contenidos en <strong>Edu Garcia Movimiento</strong>.</p>
+        
+        <div class="steps-box">
+          <table style="width: 100%; border-collapse: collapse;">
+            <tr>
+              <td style="width: 32px; vertical-align: top; padding-bottom: 12px;">
+                <div style="background-color: #2563eb; color: #ffffff; width: 24px; height: 24px; border-radius: 50%; text-align: center; line-height: 24px; font-size: 12px; font-weight: 700;">1</div>
+              </td>
+              <td style="vertical-align: top; padding-bottom: 12px; font-size: 14px; color: #334155; line-height: 1.5;">
+                Haz clic en el botón <strong>"Access now"</strong> a continuación.
+              </td>
+            </tr>
+            <tr>
+              <td style="width: 32px; vertical-align: top; padding-bottom: 12px;">
+                <div style="background-color: #2563eb; color: #ffffff; width: 24px; height: 24px; border-radius: 50%; text-align: center; line-height: 24px; font-size: 12px; font-weight: 700;">2</div>
+              </td>
+              <td style="vertical-align: top; padding-bottom: 12px; font-size: 14px; color: #334155; line-height: 1.5;">
+                El enlace se abrirá de forma segura en una nueva pestaña de tu navegador e iniciará tu sesión automáticamente.
+              </td>
+            </tr>
+            <tr>
+              <td style="width: 32px; vertical-align: top;">
+                <div style="background-color: #2563eb; color: #ffffff; width: 24px; height: 24px; border-radius: 50%; text-align: center; line-height: 24px; font-size: 12px; font-weight: 700;">3</div>
+              </td>
+              <td style="vertical-align: top; font-size: 14px; color: #334155; line-height: 1.5;">
+                Disfruta de tus clases, programas y seguimiento de entrenamiento sin interrupciones.
+              </td>
+            </tr>
+          </table>
+        </div>
+
+        <div class="btn-container">
+          <a href="${accessLink}" target="_blank" rel="noopener noreferrer" class="btn" style="background-color: #2563eb; color: #ffffff !important; padding: 14px 32px; font-size: 16px; font-weight: 700; text-decoration: none; border-radius: 8px; display: inline-block;">Access now</a>
+        </div>
+
+        <p class="note">Si el botón no funciona, copia y pega el siguiente enlace directamente en tu navegador:</p>
+        <p style="margin: 8px 0;"><a href="${accessLink}" target="_blank" rel="noopener noreferrer" class="link-text">${accessLink}</a></p>
+
+        <p class="note"><strong>Nota de seguridad:</strong> Este enlace de acceso es personal y exclusivo para tu cuenta. Si no solicitaste este acceso, por favor desestima este correo.</p>
+
+        <div class="footer">
+          <p>© ${new Date().getFullYear()} Edu Garcia Movimiento. Todos los derechos reservados.</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  const text = `¡Hola ${displayName}!\n\nHas solicitado los pasos para acceder a tu plataforma en Edu Garcia Movimiento.\n\nPasos de acceso:\n1. Haz clic en el siguiente enlace o botón 'Access now':\n${accessLink}\n2. El enlace abrirá una nueva pestaña en tu navegador e iniciará tu sesión automáticamente.\n3. Disfruta de todo tu contenido y entrenamientos.\n\nSi no solicitaste este correo, puedes ignorarlo de forma segura.\n\n© ${new Date().getFullYear()} Edu Garcia Movimiento`;
+
+  return await sendEmail({
+    to: email,
+    subject,
+    html,
+    text
+  });
+};
+
 
 export default {
   sendEmail,
   sendOtpEmail,
   sendWelcomeEmail,
   sendVerificationEmail,
+  sendAccessStepsEmail,
   formatSenderEmail
 };

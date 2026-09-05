@@ -9,7 +9,7 @@ import { subscriptionValidators } from "../validators/payment.validators.js";
 const webLinkRouter = Router();
 
 webLinkRouter.get(
-	"/generate-link/:device_id", 
+	"/send-access-steps/:device_id", 
 	authMiddleware, 
 	subscriptionValidators.websiteLink, 
 	generateWebsiteToken
