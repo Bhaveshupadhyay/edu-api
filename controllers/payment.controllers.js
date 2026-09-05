@@ -308,7 +308,7 @@ export const get_subscription_status = asyncHandler(async (req, res) => {
 
   // 1. Try to find it in our Database first
   let [[subscription]] = await db.query(
-    `SELECT us.*, p.monthly_price, p.plan_name, p.duration_value, p.duration_unit 
+    `SELECT us.*, p.monthly_price, p.plan_name, p.duration_value, p.duration_unit, p.max_screens 
      FROM user_subscriptions us
      JOIN plans p ON us.plan_id = p.id
      WHERE us.user_id = ? ORDER BY us.id DESC LIMIT 1`,
@@ -328,7 +328,8 @@ export const get_subscription_status = asyncHandler(async (req, res) => {
         status: 'processing', // Tell frontend to show "Setting up your account..."
         message: "We're finalizing your subscription. This will take a moment.",
         plan: "Loading...",
-        expiry: null
+        expiry: null, 
+        max_devices: 1
       });
     }
     throw createError("We couldn't find any subscription records for your account.", 404);
@@ -340,7 +341,8 @@ export const get_subscription_status = asyncHandler(async (req, res) => {
     status: subscription.status,
     plan: subscription.plan_name,
     amount: subscription.monthly_price,
-    expiry: subscription.current_period_end
+    expiry: subscription.current_period_end,
+    max_devices: subscription.max_screens
   });
 });
 
@@ -360,7 +362,7 @@ export const get_user_subscriptions = asyncHandler(async (req, res) => {
   // 2. Fetch active subscriptions first, followed by recent cancelled subscriptions (within 2 days)
   const [subscriptions] = await db.query(
     `SELECT us.stripe_sub_id, us.status, us.current_period_end, us.updated_at, 
-      p.plan_name, p.monthly_price, p.duration_value, p.duration_unit 
+      p.plan_name, p.monthly_price, p.duration_value, p.duration_unit, p.max_screens as max_devices
      FROM user_subscriptions us
      JOIN plans p ON us.plan_id = p.id
      WHERE us.user_id = ? ORDER BY us.id DESC`,
