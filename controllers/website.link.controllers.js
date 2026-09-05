@@ -54,7 +54,7 @@ export const generateWebsiteToken = asyncHandler(async (req, res) => {
 
   return res.status(200).json({
     isSuccess: true,
-    link
+    message: "Email sent successfully..."
   });
 });
 
